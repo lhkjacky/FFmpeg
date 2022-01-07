@@ -9,7 +9,7 @@ These scripts will setup an FFmpeg build environment with the right options enab
 - MSYS2
 
 ## Setup
-Start mingw64 from the Visual Studio x64 Native Tools Command Prompt:
+Start mingw64 from the Visual Studio x64 Native Tools Command Prompt, and then:
 ```
 cd /path/to/this/repository
 source build-scripts/setup-msvc-toolchain.sh
