@@ -3,6 +3,7 @@ These scripts will setup an FFmpeg build environment with the right options enab
 
 ## Requirements
 - CUDA Toolkit
+- Windows SDK
 - MSVC >= 14.12
 - Intel Graphics Driver
 - MSYS2
@@ -19,7 +20,7 @@ bash build-scripts/install-dependencies
 
 ### Running the Configure Command
 ```
-./configure --toolchain=msvc --enable-shared --enable-nvenc --enable-nvdec --disable-vulkan --enable-amf --enable-libmfx --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include" --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib"
+./configure --toolchain=msvc --enable-shared --enable-nvenc --enable-nvdec --disable-vulkan --enable-amf --enable-libmfx --enable-zlib --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include" --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary"
 ```
 You may want to add a `--prefix=/path/to/install/FFmpeg`.
 
