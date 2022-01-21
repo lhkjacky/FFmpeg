@@ -47,7 +47,7 @@ cp -t ../zlib-binary zlib.lib
 cd ..
 
 pacman -S --noconfirm mingw-w64-x86_64-libmfx
-echo "Please make sure that you have manually built and placed libmfx.lib in ${DPENDENCIES_DIR}/msdk-lib"
+echo "Please make sure that you have manually built and placed libmfx.lib in ${DEPENDENCIES_DIR}/msdk-lib"
 
 echo "When ready:"
 echo './configure --toolchain=msvc --enable-shared --enable-nvenc --enable-nvdec --disable-vulkan --enable-amf --enable-libmfx --enable-zlib --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include" --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary'
