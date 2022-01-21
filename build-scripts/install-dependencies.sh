@@ -2,7 +2,7 @@
 
 set -e
 
-if [[ ! -z "$DEPENDENCIES_DIR" ]]; then
+if [[ -z "$DEPENDENCIES_DIR" ]]; then
 	echo "DEPENDENCIES_DIR is not set. Aborting"
 	exit 1
 fi
