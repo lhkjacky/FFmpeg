@@ -9,14 +9,16 @@ You will need the following dependencies to build on Windows:
 - MSYS2
 
 You may also find it helpful to have the following:
-- Intel Graphics Driver (for QMF encoders)
+- Intel Graphics Driver (for QSV support)
 - CUDA Toolkit (for nvenc/nvdec support)
 
 1. Install the required dependencies
+  - When installing MSYS2, make sure you install pkg-config instead of pkgconf
 
 2. Download the Intel MSDK from [here](https://github.com/Intel-Media-SDK/MediaSDK)
   - Build the Media SDK dispatcher (libmfx_vs2015) for Windows, using the instructions at the [Media SDK Wiki](https://github.com/Intel-Media-SDK/MediaSDK/wiki/Media-SDK-dispatcher-for-Windows)
   - Make sure you change your configuration to build a 'Static library (.lib)' for x64 Release
+    - This seems to be the default output if you run `msbuild AllBuild.sln -target:libmfx_vs2015 -p:Configuration=Release`
 
 3. Open a Visual Studio x64 Native Tools Command Prompt
   - Step 4 will be executed in this Command Prompt
