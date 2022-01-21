@@ -108,8 +108,8 @@ static int config_props(AVFilterLink *outlink) {
     info.inputHeight = inlink->h;
     info.timebase = av_q2d(inlink->time_base);
     info.framerate = av_q2d(inlink->frame_rate);
-    outlink->w = inlink->w;
-    outlink->h = inlink->h;
+    outlink->w = inlink->w*veai->scale;
+    outlink->h = inlink->h*veai->scale;
     memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
     av_log(NULL, AV_LOG_WARNING, "Here Init model with params: %s %d %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device, veai->extraThreads,
@@ -130,7 +130,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFrame *out;
     IOBuffer ioBuffer;
     static int count = 1;
-    //av_log(NULL, AV_LOG_WARNING, "Handling frame %d %lf\n", count++, TS2T(in->pts, inlink->time_base));
+    av_log(NULL, AV_LOG_VERBOSE, "Handling frame %d %lf\n", count++, TS2T(in->pts, inlink->time_base));
     ioBuffer.inputBuffer = in->data[0];
     ioBuffer.inputLinesize = in->linesize[0];
     ioBuffer.inputTS = in->pts;
@@ -147,16 +147,15 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    //memcpy(out->data[0], in->data[0], in->linesize[0]*inlink->h);
     av_frame_copy_props(out, in);
     out->pts = ioBuffer.outputTS;
-    av_log(NULL, AV_LOG_WARNING, "Handling frame %d %lf %lf\n", count++, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
+    av_log(NULL, AV_LOG_VERBOSE, "Handling frame BBB %d %lf %lf\n", count++, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
     return ff_filter_frame(outlink, out);
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAIContext *veai = ctx->priv;
-    //veai->pFrameProcessor = veaiCreateFrameProcessor();
+    veai_destroy(veai->pFrameProcessor);
 }
 
 static const AVFilterPad veai_inputs[] = {
