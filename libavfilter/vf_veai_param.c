@@ -57,63 +57,53 @@ struct plane_info {
     int      width, height;
 };
 
-typedef struct VEAIContext {
+typedef struct VEAIParamContext {
     const AVClass *class;
     char *model;
-    int device, scale, extraThreads;
+    int device;
     int canDownloadModels;
-    double preBlur, noise, details, halo, blur, compression;
     void* pFrameProcessor;
-} VEAIContext;
+    int firstFrame;
+} VEAIParamContext;
 
-#define OFFSET(x) offsetof(VEAIContext, x)
+#define OFFSET(x) offsetof(VEAIParamContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
-static const AVOption veai_options[] = {
+static const AVOption veai_param_options[] = {
     { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="aaa-9"}, .flags = FLAGS },
-    { "scale",  "Output scale",  OFFSET(scale),  AV_OPT_TYPE_INT, {.i64=1}, 0, 10, FLAGS, "scale" },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
-    { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
-    { "preblur",  "Adjusts both the antialiasing and deblurring strength relative to the amount of aliasing and blurring in the input video. \nNegative values are better if the input video has aliasing artifacts such as moire patterns or staircasing. Positive values are better if the input video has more lens blurring than aliasing artifacts. ",  OFFSET(scale),  AV_OPT_TYPE_DOUBLE, {.dbl=1}, -0.99, 0.99, FLAGS, "preblur" },
-    { "noise",  "Removes ISO noise from the input video. Higher values remove more noise but may also remove fine details. \nNote that this value is relative to the amount of noise found in the input video - higher values on videos with low amounts of ISO noise may introduce more artifacts.",  OFFSET(scale),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 0.99, FLAGS, "noise" },
-    { "details",  "Used to recover fine texture and detail lost due to in-camera noise suppression. \nThis value is relative to the amount of noise suppression in the camera used for the input video, and higher values may introduce artifacts if the input video has little to no in-camera noise suppression.",  OFFSET(scale),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 0.99, FLAGS, "details" },
-    { "halo",  "Increase this if the input video has halo or ring artifacts around strong edges caused by oversharpening. \nThis value is relative to the amount of haloing artifacts in the input video, and has a \"sweet spot\". Values that are too high for the input video may cause additional artifacts to appear.",  OFFSET(scale),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 0.99, FLAGS, "halo" },
-    { "blur",  "Additional sharpening of the video. Use this if the input video looks too soft. \nThe value set should be relative to the amount of softness in the input video - if the input video is already sharp, higher values will introduce more artifacts.",  OFFSET(scale),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 0.99, FLAGS, "blur" },
-    { "compression",  "Reduces compression artifacts from codec encoding, such as blockiness or mosquito noise. Higher values are best for low bitrate videos.\nNote that the value should be relative to the amount of compression artifacts in the input video - higher values on a video with few compression artifacts will introduce more artifacts into the output.",  OFFSET(scale),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 0.99, FLAGS, "compression" },
     { NULL }
 };
 
-AVFILTER_DEFINE_CLASS(veai);
+AVFILTER_DEFINE_CLASS(veai_param);
 
 static av_cold int init(AVFilterContext *ctx) {
-  VEAIContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_WARNING, "Here init with params: %s %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device,
-        veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
-
+  VEAIParamContext *veai = ctx->priv;
+  av_log(NULL, AV_LOG_WARNING, "Here init with params: %s %d\n", veai->model, veai->device);
+  veai->firstFrame = 1;
   return veai->pFrameProcessor == NULL;
 }
 
 static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
-    VEAIContext *veai = ctx->priv;
+    VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
+    float parameter_values[6] = {0,0,0,0,0,0};
     VideoProcessorInfo info;
     info.modelName = veai->model;
-    info.scale = veai->scale;
+    info.scale = 1;
     info.deviceIndex = veai->device;
-    info.extraThreadCount = veai->extraThreads;
+    info.extraThreadCount = 0;
     info.canDownloadModel = veai->canDownloadModels;
     info.inputWidth = inlink->w;
     info.inputHeight = inlink->h;
     info.timebase = av_q2d(inlink->time_base);
     info.framerate = av_q2d(inlink->frame_rate);
-    outlink->w = inlink->w*veai->scale;
-    outlink->h = inlink->h*veai->scale;
+    outlink->w = inlink->w;
+    outlink->h = inlink->h;
     memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_WARNING, "Here Init model with params: %s %d %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device, veai->extraThreads,
-          veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
+    av_log(NULL, AV_LOG_WARNING, "Here Init model with params: %s %d\n", veai->model, veai->device);
     return veai->pFrameProcessor == NULL;
 }
 
@@ -125,7 +115,7 @@ static const enum AVPixelFormat pix_fmts[] = {
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
-    VEAIContext *veai = ctx->priv;
+    VEAIParamContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
@@ -142,6 +132,11 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
 
     ioBuffer.outputBuffer = out->data[0];
     ioBuffer.outputLinesize = out->linesize[0];
+    ioBuffer.frameType = FrameTypeNormal;
+    if(veai->firstFrame) {
+      ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
+      veai->firstFrame = 0;
+    }
     if (veai_upscaler_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
@@ -154,11 +149,11 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
-    VEAIContext *veai = ctx->priv;
+    VEAIParamContext *veai = ctx->priv;
     veai_destroy(veai->pFrameProcessor);
 }
 
-static const AVFilterPad veai_inputs[] = {
+static const AVFilterPad veai_param_inputs[] = {
     {
         .name         = "default",
         .type         = AVMEDIA_TYPE_VIDEO,
@@ -166,7 +161,7 @@ static const AVFilterPad veai_inputs[] = {
     },
 };
 
-static const AVFilterPad veai_outputs[] = {
+static const AVFilterPad veai_param_outputs[] = {
     {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
@@ -174,15 +169,15 @@ static const AVFilterPad veai_outputs[] = {
     },
 };
 
-const AVFilter ff_vf_veai = {
-    .name          = "veai",
+const AVFilter ff_vf_veai_param = {
+    .name          = "veai_param",
     .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI models."),
-    .priv_size     = sizeof(VEAIContext),
+    .priv_size     = sizeof(VEAIParamContext),
     .init          = init,
     .uninit        = uninit,
-    FILTER_INPUTS(veai_inputs),
-    FILTER_OUTPUTS(veai_outputs),
+    FILTER_INPUTS(veai_param_inputs),
+    FILTER_OUTPUTS(veai_param_outputs),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .priv_class    = &veai_class,
+    .priv_class    = &veai_param_class,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
 };
