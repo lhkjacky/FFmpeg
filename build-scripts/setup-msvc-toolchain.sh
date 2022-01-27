@@ -11,9 +11,10 @@ elif [[ -z "$WindowsSdkVerBinPath" ]]; then
 fi
 
 export PATH="${VCINSTALLDIR}/Tools/MSVC/${VCToolsVersion}/bin/Hostx64/x64/":$PATH
+export PATH="${VCINSTALLDIR}/../MSBuild/Current/Bin":$PATH
 if [[ ! -z "$CUDA_PATH" ]]; then
 	export PATH="${CUDA_PATH}/bin/":$PATH
 fi
 export PATH="${WindowsSdkVerBinPath}/x64/":$PATH
-export PKG_CONFIG_PATH="/c/msys64/usr/local/lib/pkgconfig":$PKG_CONFIG_PATH
+export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig":$PKG_CONFIG_PATH
 
