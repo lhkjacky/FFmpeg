@@ -47,7 +47,13 @@ cp -t ../zlib-binary zlib.lib
 cd ..
 
 pacman -S --noconfirm mingw-w64-x86_64-libmfx
-echo "Please make sure that you have manually built and placed libmfx.lib in ${DEPENDENCIES_DIR}/msdk-lib"
+git clone https://github.com/Intel-Media-SDK/MediaSDK msdk
+cd msdk
+msbuild.exe AllBuild.sln -target:libmfx_vs2015 -p:Configuration=Release
+cd ..
+mkdir msdk-lib
+cp build/win_x64/Release/lib/libmfx_vs2015.lib msdk-lib/libmfx.lib
+cp build/win_x64/Release/lib/libmfx_vs2015.pdb msdk-lib/libmfx.pdb
 
 echo "When ready:"
-echo './configure --toolchain=msvc --enable-shared --enable-nvenc --enable-nvdec --disable-vulkan --enable-amf --enable-libmfx --enable-zlib --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include" --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary'
+echo './configure --toolchain=msvc --enable-shared --enable-nvenc --enable-nvdec --disable-vulkan --enable-amf --enable-libmfx --enable-zlib --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include" --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary"'
