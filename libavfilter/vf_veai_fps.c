@@ -65,6 +65,7 @@ typedef struct VEAIFpsContext {
     int canDownloadModels;
     void* pFrameProcessor;
     int firstFrame;
+    unsigned int count;
 } VEAIFpsContext;
 
 #define OFFSET(x) offsetof(VEAIFpsContext, x)
