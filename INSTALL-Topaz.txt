@@ -1,5 +1,36 @@
 ## Installing FFmpeg for Topaz Labs Products
 
+### Mac
+You should install the dependencies mentioned [here](https://trac.ffmpeg.org/wiki/CompilationGuide/macOS#CompilingFFmpegyourself). We likely won't use all of them, but you'll get everything you need.
+
+1. If you wish to enable VEAI support, locate the veai.h file and the libveai.dylib and libaiengine.dylib files included with VEAI. Make a note of these two folders.
+
+2. Execute the following command:
+```
+./configure --prefix=/path/to/install/to --enable-shared --enable-veai --extra-cflags="-I/path/to/folder/with/veai.h" --extra-ldflags="-L/path/to/folder/with/libveai.dylib"
+```
+
+If there are additional features you want enabled, make sure you add the corresponding option(s) to the above command.
+
+3. Execute the following commands:
+```
+make -j8 install
+```
+
+FFmpeg will be installed to /path/to/install/to.
+
+4. If the executables complain about missing dylibs, you may need to use install_name_tool to change the path to one or more dependencies.
+```
+otool -L /path/to/executable
+-OUTPUT SNIPPED-
+libveai.0.dylib ...
+-OUTPUT SNIPPED-
+
+install_name_tool -change libveai.0.dylib /path/to/real/libveai.0.dylib /path/to/executable
+```
+
+You may need to repeat step 4 for multiple dependencies and files. If you're unable to find a dependency, check inside VEAI's .app file.
+
 ### Windows
 
 You will need the following dependencies to build on Windows:
