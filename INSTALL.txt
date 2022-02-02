@@ -32,7 +32,7 @@ You may also find it helpful to have the following:
 
 8. Ensure that libmfx.lib is in `${DEPENDENCIES_DIR}/msdk-lib`. If it is not present, build the Intel Media SDK Dispatcher manually.
 
-9. Find and note the location of your aiengine.lib and veai.lib files.
+9. If you wish to enable VEAI support you will need to find the veai.h, aiengine.lib, and veai.lib files provided with VEAI. Make a note of what folders these are in.
 
 10. Determine which features you will enable. We use all of the following:
   - `--enable-nvenc` CUDA encoders
@@ -47,9 +47,8 @@ You may also find it helpful to have the following:
 ```
 ./configure --toolchain=msvc --prefix=/path/to/install/to --enable-shared --enable-nvenc --enable-nvdec --disable-vulkan \
  --enable-amf --enable-libmfx --enable-zlib --enable-veai \ 
- --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include -I/path/to/folder/with/aiengine/sources/veai" \
- --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary -libpath:/path/to/folder/with/aiengine/lib/files" \
- --extra-libs="aiengine.lib veai.lib"
+ --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include -I/path/to/folder/with/veai.h" \
+ --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary -libpath:/path/to/folder/with/veai.lib" \
 ```
 
 If you wish to enable another feature, or disable a specific feature, make sure to add the corresponding option to the command
@@ -60,4 +59,4 @@ make -r -j8
 make -r install
 ```
 
-13. ffmpeg is now installed to `/path/to/install/to`. You may need to copy the dll files from your VEAI install into the `/path/to/install/to/bin` folder to run the program.
+13. ffmpeg is now installed to `/path/to/install/to`. You will likely need to copy the dll files from your VEAI install into the `/path/to/install/to/bin` folder to run the program.
