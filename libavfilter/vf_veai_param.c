@@ -104,7 +104,7 @@ static int config_props(AVFilterLink *outlink) {
     memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
     av_log(NULL, AV_LOG_WARNING, "Here Init model with params: %s %d\n", veai->model, veai->device);
-    return veai->pFrameProcessor == NULL;
+    return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
 }
 
 

@@ -83,9 +83,9 @@ AVFILTER_DEFINE_CLASS(veai_fps);
 
 static av_cold int init(AVFilterContext *ctx) {
   VEAIFpsContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_WARNING, "Here init with params: %s %lf %d %d\n", veai->model, veai->fps, veai->device, veai->extraThreads);
+  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %lf %d %d\n", veai->model, veai->fps, veai->device, veai->extraThreads);
   veai->firstFrame = 1;
-  return veai->pFrameProcessor == NULL;
+  return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
 }
 
 static int config_props(AVFilterLink *outlink) {
@@ -107,8 +107,8 @@ static int config_props(AVFilterLink *outlink) {
     outlink->h = inlink->h;
     memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_WARNING, "Here Init model with params: %s %lf %d %d\n", veai->model, veai->fps, veai->device, veai->extraThreads);
-    return veai->pFrameProcessor == NULL;
+    av_log(NULL, AV_LOG_DEBUG, "Here Init model with params: %s %lf %d %d\n", veai->model, veai->fps, veai->device, veai->extraThreads);
+    return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
 }
 
 
@@ -124,8 +124,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFrame *out;
     IOBuffer ioBuffer;
     static int count = 1;
-    // pts = av_rescale(avf_out->pts, (int64_t) ALPHA_MAX * outlink->time_base.num * inlink->time_base.den,
-    //                               (int64_t)             outlink->time_base.den * inlink->time_base.num);
+     // pts = av_rescale(avf_out->pts, (int64_t) ALPHA_MAX * outlink->time_base.num * inlink->time_base.den,
+     //                               (int64_t)             outlink->time_base.den * inlink->time_base.num);
     av_log(NULL, AV_LOG_VERBOSE, "Handling frame %d %lf\n", count++, TS2T(in->pts, inlink->time_base));
     ioBuffer.inputBuffer = in->data[0];
     ioBuffer.inputLinesize = in->linesize[0];
@@ -177,7 +177,7 @@ static const AVFilterPad veai_fps_outputs[] = {
 
 const AVFilter ff_vf_veai_fps = {
     .name          = "veai_fps",
-    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI models."),
+    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI frame interpolation models."),
     .priv_size     = sizeof(VEAIFpsContext),
     .init          = init,
     .uninit        = uninit,

@@ -115,9 +115,9 @@ static int config_props(AVFilterLink *outlink) {
     outlink->h = inlink->h*veai->scale;
     memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_WARNING, "Here Config props model with params: %s %d %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device, veai->extraThreads,
+    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device, veai->extraThreads,
           veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
-    return veai->pFrameProcessor == NULL;
+    return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -140,7 +140,10 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         av_frame_free(&in);
         return AVERROR(ENOMEM);
     }
-
+    if(veai->pFrameProcessor == NULL) {
+        av_log(NULL, AV_LOG_ERROR, "The processing has failed, frame processor has not been created");
+        return AVERROR(ENOSYS);
+    }
     ioBuffer.outputBuffer = out->data[0];
     ioBuffer.outputLinesize = out->linesize[0];
     ioBuffer.frameType = FrameTypeNormal;
@@ -188,7 +191,7 @@ static const AVFilterPad veai_up_outputs[] = {
 
 const AVFilter ff_vf_veai_up = {
     .name          = "veai_up",
-    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI upscale models."),
+    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI upscale models, parameters will only be applied to appropriate models"),
     .priv_size     = sizeof(VEAIUpContext),
     .init          = init,
     .uninit        = uninit,
