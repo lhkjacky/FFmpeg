@@ -100,6 +100,30 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAIUpContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
+    int logLevel = av_log_get_level();
+
+    if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
+        veai_disable_logging();
+    }
+    if(veai->scale != 1 && veai->scale != 2 && veai->scale !=4 ) {
+        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for scale, only 1,2,4 allowed for scale\n", veai->scale);
+        return AVERROR(EINVAL);
+    }
+    char devices[1024];
+    int device_count = veai_device_list(devices, 1024);
+    if(veai->device < -2 || veai->device > device_count ) {
+        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", veai->device, devices, device_count);
+        return AVERROR(EINVAL);
+    }
+    char modelString[10024];
+    int modelStringSize = veai_model_list(veai->model, 0, modelString, 10024);
+    if(modelStringSize > 0) {
+        av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
+        return AVERROR(EINVAL);
+    } else if(modelStringSize < 0) {
+      av_log(NULL, AV_LOG_ERROR, "%s\n", modelString);
+      return AVERROR(EINVAL);
+    }
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
     VideoProcessorInfo info;
     info.modelName = veai->model;
@@ -111,13 +135,15 @@ static int config_props(AVFilterLink *outlink) {
     info.inputHeight = inlink->h;
     info.timebase = av_q2d(inlink->time_base);
     info.framerate = av_q2d(inlink->frame_rate);
+
     outlink->w = inlink->w*veai->scale;
     outlink->h = inlink->h*veai->scale;
+
     memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
     av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device, veai->extraThreads,
           veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
-    return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
+    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
