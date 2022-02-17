@@ -66,6 +66,8 @@ typedef struct VEAIUpContext {
     void* pFrameProcessor;
     int firstFrame;
     unsigned int count;
+    int64_t nb_frames;
+    unsigned eof;
 } VEAIUpContext;
 
 #define OFFSET(x) offsetof(VEAIUpContext, x)
@@ -116,7 +118,7 @@ static int config_props(AVFilterLink *outlink) {
         return AVERROR(EINVAL);
     }
     char modelString[10024];
-    int modelStringSize = veai_model_list(veai->model, 0, modelString, 10024);
+    int modelStringSize = veai_model_list(veai->model, 1, modelString, 10024);
     if(modelStringSize > 0) {
         av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
         return AVERROR(EINVAL);
@@ -157,7 +159,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    av_log(NULL, AV_LOG_DEBUG, "About to filter frame %d %s %u %lf\n", veai->count, veai->model, veai->scale, TS2T(in->pts, inlink->time_base));
+    av_log(NULL, AV_LOG_DEBUG, "About to filter frame %d %s %u %lf %lf %d\n", veai->count, veai->model, veai->scale, TS2T(in->pts, inlink->time_base), veai->nb_frames, veai->eof);
     ioBuffer.inputBuffer = in->data[0];
     ioBuffer.inputLinesize = in->linesize[0];
     ioBuffer.inputTS = in->pts;
