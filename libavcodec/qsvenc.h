@@ -41,6 +41,7 @@
 
 #define QSV_HAVE_EXT_HEVC_TILES QSV_VERSION_ATLEAST(1, 13)
 #define QSV_HAVE_EXT_VP9_PARAM QSV_VERSION_ATLEAST(1, 26)
+#define QSV_HAVE_EXT_VP9_TILES QSV_VERSION_ATLEAST(1, 29)
 
 #define QSV_HAVE_TRELLIS QSV_VERSION_ATLEAST(1, 8)
 #define QSV_HAVE_MAX_SLICE_SIZE QSV_VERSION_ATLEAST(1, 9)
@@ -150,7 +151,7 @@ typedef struct QSVEncContext {
 
     mfxExtBuffer **extparam;
 
-    AVFifoBuffer *async_fifo;
+    AVFifo *async_fifo;
 
     QSVFramesContext frames_ctx;
 
