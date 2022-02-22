@@ -35,69 +35,43 @@
 #include "video.h"
 #include "veai.h"
 
-#define PLANE_R 0x4
-#define PLANE_G 0x1
-#define PLANE_B 0x2
-#define PLANE_Y 0x1
-#define PLANE_U 0x2
-#define PLANE_V 0x4
-#define PLANE_A 0x8
-
-enum FilterMode {
-    MODE_WIRES,
-    MODE_COLORMIX,
-    MODE_CANNY,
-    NB_MODE
-};
-
-struct plane_info {
-    uint8_t  *tmpbuf;
-    uint16_t *gradients;
-    char     *directions;
-    int      width, height;
-};
-
-typedef struct VEAIFpsContext {
+typedef struct VEAIParamContext {
     const AVClass *class;
     char *model;
-    int device, extraThreads;
-    double fps;
+    int device;
     int canDownloadModels;
     void* pFrameProcessor;
     int firstFrame;
-    unsigned int count;
-} VEAIFpsContext;
+} VEAIParamContext;
 
-#define OFFSET(x) offsetof(VEAIFpsContext, x)
+#define OFFSET(x) offsetof(VEAIParamContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
-static const AVOption veai_fps_options[] = {
-    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="aaa-9"}, .flags = FLAGS },
-    { "fps",  "Output fps",  OFFSET(fps),  AV_OPT_TYPE_DOUBLE, {.dbl=2.0}, 0.1, 100, FLAGS, "fps" },
+static const AVOption veai_param_options[] = {
+    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="prob_ap-2"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
-    { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
     { NULL }
 };
 
-AVFILTER_DEFINE_CLASS(veai_fps);
+AVFILTER_DEFINE_CLASS(veai_param);
 
 static av_cold int init(AVFilterContext *ctx) {
-  VEAIFpsContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %lf %d %d\n", veai->model, veai->fps, veai->device, veai->extraThreads);
+  VEAIParamContext *veai = ctx->priv;
+  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
   veai->firstFrame = 1;
-  return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
+  return veai->pFrameProcessor == NULL;
 }
 
 static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
-    VEAIFpsContext *veai = ctx->priv;
+    VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
     float parameter_values[6] = {0,0,0,0,0,0};
     VideoProcessorInfo info;
     info.modelName = veai->model;
     info.scale = 1;
     info.deviceIndex = veai->device;
-    info.extraThreadCount = veai->extraThreads;
+    info.extraThreadCount = 0;
     info.canDownloadModel = veai->canDownloadModels;
     info.inputWidth = inlink->w;
     info.inputHeight = inlink->h;
@@ -107,7 +81,7 @@ static int config_props(AVFilterLink *outlink) {
     outlink->h = inlink->h;
     memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_DEBUG, "Here Init model with params: %s %lf %d %d\n", veai->model, veai->fps, veai->device, veai->extraThreads);
+    av_log(NULL, AV_LOG_DEBUG, "Here Init model with params: %s %d\n", veai->model, veai->device);
     return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
 }
 
@@ -119,13 +93,11 @@ static const enum AVPixelFormat pix_fmts[] = {
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
-    VEAIFpsContext *veai = ctx->priv;
+    VEAIParamContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
     static int count = 1;
-     // pts = av_rescale(avf_out->pts, (int64_t) ALPHA_MAX * outlink->time_base.num * inlink->time_base.den,
-     //                               (int64_t)             outlink->time_base.den * inlink->time_base.num);
     av_log(NULL, AV_LOG_VERBOSE, "Handling frame %d %lf\n", count++, TS2T(in->pts, inlink->time_base));
     ioBuffer.inputBuffer = in->data[0];
     ioBuffer.inputLinesize = in->linesize[0];
@@ -143,7 +115,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
       ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
       veai->firstFrame = 0;
     }
-    if (veai_upscaler_process(veai->pFrameProcessor,  &ioBuffer)) {
+    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
@@ -155,11 +127,11 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
-    VEAIFpsContext *veai = ctx->priv;
+    VEAIParamContext *veai = ctx->priv;
     veai_destroy(veai->pFrameProcessor);
 }
 
-static const AVFilterPad veai_fps_inputs[] = {
+static const AVFilterPad veai_param_inputs[] = {
     {
         .name         = "default",
         .type         = AVMEDIA_TYPE_VIDEO,
@@ -167,7 +139,7 @@ static const AVFilterPad veai_fps_inputs[] = {
     },
 };
 
-static const AVFilterPad veai_fps_outputs[] = {
+static const AVFilterPad veai_param_outputs[] = {
     {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
@@ -175,15 +147,15 @@ static const AVFilterPad veai_fps_outputs[] = {
     },
 };
 
-const AVFilter ff_vf_veai_fps = {
-    .name          = "veai_fps",
-    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI frame interpolation models."),
-    .priv_size     = sizeof(VEAIFpsContext),
+const AVFilter ff_vf_veai_param = {
+    .name          = "veai_param",
+    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI models."),
+    .priv_size     = sizeof(VEAIParamContext),
     .init          = init,
     .uninit        = uninit,
-    FILTER_INPUTS(veai_fps_inputs),
-    FILTER_OUTPUTS(veai_fps_outputs),
+    FILTER_INPUTS(veai_param_inputs),
+    FILTER_OUTPUTS(veai_param_outputs),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .priv_class    = &veai_fps_class,
+    .priv_class    = &veai_param_class,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
 };
