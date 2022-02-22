@@ -35,7 +35,7 @@
 #include "video.h"
 #include "veai.h"
 
-typedef struct VEAIFIContext {
+typedef struct  {
     const AVClass *class;
     char *model;
     int device, extraThreads;
@@ -44,13 +44,13 @@ typedef struct VEAIFIContext {
     void* pFrameProcessor;
     int firstFrame;
     unsigned int count;
-} VEAIFpsContext;
+} VEAIFIContext;
 
 #define OFFSET(x) offsetof(VEAIFIContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 static const AVOption veai_fi_options[] = {
     { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="aaa-9"}, .flags = FLAGS },
-    { "Slow",  "Output fps",  OFFSET(fps),  AV_OPT_TYPE_DOUBLE, {.dbl=2.0}, 0.1, 100, FLAGS, "fps" },
+    { "slow",  "Output fps",  OFFSET(fps),  AV_OPT_TYPE_DOUBLE, {.dbl=2.0}, 0.1, 100, FLAGS, "fps" },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
@@ -60,16 +60,8 @@ static const AVOption veai_fi_options[] = {
 AVFILTER_DEFINE_CLASS(veai_fi);
 
 static av_cold int init(AVFilterContext *ctx) {
-  VEAIFpsContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %lf %d %d\n", veai->model, veai->fps, veai->device, veai->extraThreads);
-  veai->firstFrame = 1;
-  return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
-}
-
-static av_cold int init(AVFilterContext *ctx) {
-  VEAIUpContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device,
-        veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
+  VEAIFIContext *veai = ctx->priv;
+  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d %d %lf\n", veai->model, veai->device, veai->extraThreads, veai->fps);
   veai->firstFrame = 1;
   veai->count = 0;
   return 0;
@@ -77,7 +69,7 @@ static av_cold int init(AVFilterContext *ctx) {
 
 static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
-    VEAIUpContext *veai = ctx->priv;
+    VEAIFIContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
     int logLevel = av_log_get_level();
 
@@ -99,7 +91,6 @@ static int config_props(AVFilterLink *outlink) {
       av_log(NULL, AV_LOG_ERROR, "%s\n", modelString);
       return AVERROR(EINVAL);
     }
-    float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
     VideoProcessorInfo info;
     info.basic.processorName = "fi";
     info.basic.modelName = veai->model;
@@ -115,9 +106,8 @@ static int config_props(AVFilterLink *outlink) {
     outlink->w = inlink->w;
     outlink->h = inlink->h;
 
-    memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
     veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d %lf", veai->model, veai->device, veai->extraThreads, veai->);
+    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d %lf", veai->model, veai->device, veai->extraThreads, veai->fps);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
@@ -129,7 +119,7 @@ static const enum AVPixelFormat pix_fmts[] = {
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
-    VEAIFpsContext *veai = ctx->priv;
+    VEAIFIContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
@@ -153,7 +143,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
       ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
       veai->firstFrame = 0;
     }
-    if (veai_upscaler_process(veai->pFrameProcessor,  &ioBuffer)) {
+    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
@@ -165,7 +155,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
-    VEAIFpsContext *veai = ctx->priv;
+    VEAIFIContext *veai = ctx->priv;
     veai_destroy(veai->pFrameProcessor);
 }
 
