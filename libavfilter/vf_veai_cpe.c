@@ -42,15 +42,12 @@ typedef struct VEAICPEContext {
     int canDownloadModels;
     void* pFrameProcessor;
     int firstFrame;
-    unsigned int count;
-    int64_t nb_frames;
-    unsigned eof;
 } VEAICPEContext;
 
 #define OFFSET(x) offsetof(VEAICPEContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 static const AVOption veai_cpe_options[] = {
-    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="aaa-9"}, .flags = FLAGS },
+    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="cam-1"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
@@ -63,7 +60,6 @@ static av_cold int init(AVFilterContext *ctx) {
   VEAICPEContext *veai = ctx->priv;
   av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
   veai->firstFrame = 1;
-  veai->count = 0;
   return 0;
 }
 
@@ -83,7 +79,7 @@ static int config_props(AVFilterLink *outlink) {
         return AVERROR(EINVAL);
     }
     char modelString[10024];
-    int modelStringSize = veai_model_list(veai->model, 1, modelString, 10024);
+    int modelStringSize = veai_model_list(veai->model, 3, modelString, 10024);
     if(modelStringSize > 0) {
         av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
         return AVERROR(EINVAL);
@@ -120,41 +116,26 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     VEAICPEContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    AVFrame *out;
     IOBuffer ioBuffer;
-    av_log(NULL, AV_LOG_DEBUG, "About to filter frame %d %s %lf %lf %d\n", veai->count, veai->model, TS2T(in->pts, inlink->time_base), veai->nb_frames, veai->eof);
+    av_log(NULL, AV_LOG_DEBUG, "About to filter frame %s %lf %lf %d\n", veai->model, TS2T(in->pts, inlink->time_base));
     ioBuffer.inputBuffer = in->data[0];
     ioBuffer.inputLinesize = in->linesize[0];
     ioBuffer.inputTS = in->pts;
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
-    if (!out) {
-        av_frame_free(&in);
-        return AVERROR(ENOMEM);
-    }
     if(veai->pFrameProcessor == NULL) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed, frame processor has not been created");
         return AVERROR(ENOSYS);
     }
-    ioBuffer.outputBuffer = out->data[0];
-    ioBuffer.outputLinesize = out->linesize[0];
+    float transform[4] = {0,0,0,0};
+    ioBuffer.outputBuffer = transform;
+    ioBuffer.outputLinesize = sizeof(float)*4;
     ioBuffer.frameType = FrameTypeNormal;
-    if(veai->firstFrame) {
-      ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
-      veai->firstFrame = 0;
-    }
     if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    av_frame_copy_props(out, in);
-    out->pts = ioBuffer.outputTS;
-    if(ioBuffer.outputTS < 0) {
-      av_log(NULL, AV_LOG_DEBUG, "Ignoring frame %d %s %lf %lf\n", veai->count++, veai->model, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
-      return 0;
-    }
-    av_log(NULL, AV_LOG_DEBUG, "Finished processing frame %d %s %lf %lf\n", veai->count++, veai->model, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
-    return ff_filter_frame(outlink, out);
+    av_log(NULL, AV_LOG_ERROR, "CPE: %f\t%f\t%f\t%f\n", transform[0], transform[1], transform[2], transform[3]);
+    return 0;
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
