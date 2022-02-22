@@ -102,7 +102,7 @@ static int config_props(AVFilterLink *outlink) {
     outlink->h = inlink->h;
 
     veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d\n", veai->model, veai->device, veai->extraThreads);
+    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d\n", veai->model, veai->device);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
