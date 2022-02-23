@@ -42,6 +42,7 @@ typedef struct VEAICPEContext {
     int canDownloadModels;
     void* pFrameProcessor;
     int firstFrame;
+    unsigned int counter;
 } VEAICPEContext;
 
 #define OFFSET(x) offsetof(VEAICPEContext, x)
@@ -60,6 +61,7 @@ static av_cold int init(AVFilterContext *ctx) {
   VEAICPEContext *veai = ctx->priv;
   av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
   veai->firstFrame = 1;
+  veai->counter = 0;
   return 0;
 }
 
@@ -125,21 +127,31 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed, frame processor has not been created");
         return AVERROR(ENOSYS);
     }
+
     float transform[4] = {0,0,0,0};
     ioBuffer.outputBuffer = transform;
     ioBuffer.outputLinesize = sizeof(float)*4;
     ioBuffer.frameType = FrameTypeNormal;
+    int ignoreValue = veai->firstFrame;
+    if(veai->firstFrame) {
+      ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
+      veai->firstFrame = 0;
+    }
     if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    av_log(NULL, AV_LOG_ERROR, "CPE: %f\t%f\t%f\t%f\n", transform[0], transform[1], transform[2], transform[3]);
+    if(ignoreValue)
+      return 0;
+    av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
     return 0;
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAICPEContext *veai = ctx->priv;
+    float transform[4] = {0,0,0,0};
+    av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
     av_log(NULL, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
