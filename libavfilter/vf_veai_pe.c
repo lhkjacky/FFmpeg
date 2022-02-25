@@ -35,28 +35,6 @@
 #include "video.h"
 #include "veai.h"
 
-#define PLANE_R 0x4
-#define PLANE_G 0x1
-#define PLANE_B 0x2
-#define PLANE_Y 0x1
-#define PLANE_U 0x2
-#define PLANE_V 0x4
-#define PLANE_A 0x8
-
-enum FilterMode {
-    MODE_WIRES,
-    MODE_COLORMIX,
-    MODE_CANNY,
-    NB_MODE
-};
-
-struct plane_info {
-    uint8_t  *tmpbuf;
-    uint16_t *gradients;
-    char     *directions;
-    int      width, height;
-};
-
 typedef struct VEAIParamContext {
     const AVClass *class;
     char *model;
@@ -68,18 +46,18 @@ typedef struct VEAIParamContext {
 
 #define OFFSET(x) offsetof(VEAIParamContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
-static const AVOption veai_param_options[] = {
-    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="aaa-9"}, .flags = FLAGS },
+static const AVOption veai_pe_options[] = {
+    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="prob_ap-2"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
     { NULL }
 };
 
-AVFILTER_DEFINE_CLASS(veai_param);
+AVFILTER_DEFINE_CLASS(veai_pe);
 
 static av_cold int init(AVFilterContext *ctx) {
   VEAIParamContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_WARNING, "Here init with params: %s %d\n", veai->model, veai->device);
+  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
   veai->firstFrame = 1;
   return veai->pFrameProcessor == NULL;
 }
@@ -88,23 +66,44 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    float parameter_values[6] = {0,0,0,0,0,0};
+    int logLevel = av_log_get_level();
+
+    if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
+        veai_disable_logging();
+    }
+    char devices[1024];
+    int device_count = veai_device_list(devices, 1024);
+    if(veai->device < -2 || veai->device > device_count ) {
+        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", veai->device, devices, device_count);
+        return AVERROR(EINVAL);
+    }
+    char modelString[10024];
+    int modelStringSize = veai_model_list(veai->model, 1, modelString, 10024);
+    if(modelStringSize > 0) {
+        av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
+        return AVERROR(EINVAL);
+    } else if(modelStringSize < 0) {
+      av_log(NULL, AV_LOG_ERROR, "%s\n", modelString);
+      return AVERROR(EINVAL);
+    }
     VideoProcessorInfo info;
-    info.modelName = veai->model;
-    info.scale = 1;
-    info.deviceIndex = veai->device;
-    info.extraThreadCount = 0;
-    info.canDownloadModel = veai->canDownloadModels;
-    info.inputWidth = inlink->w;
-    info.inputHeight = inlink->h;
-    info.timebase = av_q2d(inlink->time_base);
-    info.framerate = av_q2d(inlink->frame_rate);
+    info.basic.processorName = "cpe";
+    info.basic.modelName = veai->model;
+    info.basic.scale = 1;
+    info.basic.deviceIndex = veai->device;
+    info.basic.extraThreadCount = 0;
+    info.basic.canDownloadModel = veai->canDownloadModels;
+    info.basic.inputWidth = inlink->w;
+    info.basic.inputHeight = inlink->h;
+    info.basic.timebase = av_q2d(inlink->time_base);
+    info.basic.framerate = av_q2d(inlink->frame_rate);
+
     outlink->w = inlink->w;
     outlink->h = inlink->h;
-    memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
+
     veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_WARNING, "Here Init model with params: %s %d\n", veai->model, veai->device);
-    return veai->pFrameProcessor == NULL ? AVERROR(ENOSYS) : 0;
+    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d\n", veai->model, veai->device);
+    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
 
@@ -137,7 +136,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
       ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
       veai->firstFrame = 0;
     }
-    if (veai_upscaler_process(veai->pFrameProcessor,  &ioBuffer)) {
+    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
@@ -153,7 +152,7 @@ static av_cold void uninit(AVFilterContext *ctx) {
     veai_destroy(veai->pFrameProcessor);
 }
 
-static const AVFilterPad veai_param_inputs[] = {
+static const AVFilterPad veai_pe_inputs[] = {
     {
         .name         = "default",
         .type         = AVMEDIA_TYPE_VIDEO,
@@ -161,7 +160,7 @@ static const AVFilterPad veai_param_inputs[] = {
     },
 };
 
-static const AVFilterPad veai_param_outputs[] = {
+static const AVFilterPad veai_pe_outputs[] = {
     {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
@@ -169,15 +168,15 @@ static const AVFilterPad veai_param_outputs[] = {
     },
 };
 
-const AVFilter ff_vf_veai_param = {
-    .name          = "veai_param",
+const AVFilter ff_vf_veai_pe = {
+    .name          = "veai_pe",
     .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI models."),
     .priv_size     = sizeof(VEAIParamContext),
     .init          = init,
     .uninit        = uninit,
-    FILTER_INPUTS(veai_param_inputs),
-    FILTER_OUTPUTS(veai_param_outputs),
+    FILTER_INPUTS(veai_pe_inputs),
+    FILTER_OUTPUTS(veai_pe_outputs),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .priv_class    = &veai_param_class,
+    .priv_class    = &veai_pe_class,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
 };

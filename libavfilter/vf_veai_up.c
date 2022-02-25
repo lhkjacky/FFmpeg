@@ -128,15 +128,16 @@ static int config_props(AVFilterLink *outlink) {
     }
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
     VideoProcessorInfo info;
-    info.modelName = veai->model;
-    info.scale = veai->scale;
-    info.deviceIndex = veai->device;
-    info.extraThreadCount = veai->extraThreads;
-    info.canDownloadModel = veai->canDownloadModels;
-    info.inputWidth = inlink->w;
-    info.inputHeight = inlink->h;
-    info.timebase = av_q2d(inlink->time_base);
-    info.framerate = av_q2d(inlink->frame_rate);
+    info.basic.processorName = "up";
+    info.basic.modelName = veai->model;
+    info.basic.scale = veai->scale;
+    info.basic.deviceIndex = veai->device;
+    info.basic.extraThreadCount = veai->extraThreads;
+    info.basic.canDownloadModel = veai->canDownloadModels;
+    info.basic.inputWidth = inlink->w;
+    info.basic.inputHeight = inlink->h;
+    info.basic.timebase = av_q2d(inlink->time_base);
+    info.basic.framerate = av_q2d(inlink->frame_rate);
 
     outlink->w = inlink->w*veai->scale;
     outlink->h = inlink->h*veai->scale;
@@ -179,7 +180,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
       ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
       veai->firstFrame = 0;
     }
-    if (veai_upscaler_process(veai->pFrameProcessor,  &ioBuffer)) {
+    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
