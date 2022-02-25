@@ -143,9 +143,9 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         return AVERROR(ENOSYS);
     }
     if(ignoreValue)
-      return 0;
+      return ff_filter_frame(outlink, in);
     av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
-    return 0;
+    return ff_filter_frame(outlink, in);
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
