@@ -33,7 +33,7 @@
 #include "formats.h"
 #include "internal.h"
 #include "video.h"
-#include "veai.h"
+#include "veai_common.h"
 
 typedef struct VEAIParamContext {
     const AVClass *class;
@@ -66,43 +66,8 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    int logLevel = av_log_get_level();
 
-    if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
-        veai_disable_logging();
-    }
-    char devices[1024];
-    int device_count = veai_device_list(devices, 1024);
-    if(veai->device < -2 || veai->device > device_count ) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", veai->device, devices, device_count);
-        return AVERROR(EINVAL);
-    }
-    char modelString[10024];
-    int modelStringSize = veai_model_list(veai->model, 1, modelString, 10024);
-    if(modelStringSize > 0) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
-        return AVERROR(EINVAL);
-    } else if(modelStringSize < 0) {
-      av_log(NULL, AV_LOG_ERROR, "%s\n", modelString);
-      return AVERROR(EINVAL);
-    }
-    VideoProcessorInfo info;
-    info.basic.processorName = "cpe";
-    info.basic.modelName = veai->model;
-    info.basic.scale = 1;
-    info.basic.deviceIndex = veai->device;
-    info.basic.extraThreadCount = 0;
-    info.basic.canDownloadModel = veai->canDownloadModels;
-    info.basic.inputWidth = inlink->w;
-    info.basic.inputHeight = inlink->h;
-    info.basic.timebase = av_q2d(inlink->time_base);
-    info.basic.framerate = av_q2d(inlink->frame_rate);
-
-    outlink->w = inlink->w;
-    outlink->h = inlink->h;
-
-    veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d\n", veai->model, veai->device);
+    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeCamPoseEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
@@ -116,35 +81,20 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    AVFrame *out;
     IOBuffer ioBuffer;
-    static int count = 1;
-    av_log(NULL, AV_LOG_VERBOSE, "Handling frame %d %lf\n", count++, TS2T(in->pts, inlink->time_base));
-    ioBuffer.inputBuffer = in->data[0];
-    ioBuffer.inputLinesize = in->linesize[0];
-    ioBuffer.inputTS = in->pts;
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
-    if (!out) {
-        av_frame_free(&in);
-        return AVERROR(ENOMEM);
-    }
+    veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
 
-    ioBuffer.outputBuffer = out->data[0];
-    ioBuffer.outputLinesize = out->linesize[0];
-    ioBuffer.frameType = FrameTypeNormal;
-    if(veai->firstFrame) {
-      ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
-      veai->firstFrame = 0;
-    }
-    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
+    float parameters[VEAI_MAX_PARAMETER_COUNT] = {0};
+    ioBuffer.outputBuffer = (unsigned char *)parameters;
+    ioBuffer.outputLinesize = sizeof(float)*VEAI_MAX_PARAMETER_COUNT;
+
+    if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    av_frame_copy_props(out, in);
-    out->pts = ioBuffer.outputTS;
-    av_log(NULL, AV_LOG_VERBOSE, "Handling frame BBB %d %lf %lf\n", count++, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
-    return ff_filter_frame(outlink, out);
+    veai->firstFrame = 0;
+    return ff_filter_frame(outlink, in);
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {

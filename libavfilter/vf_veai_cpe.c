@@ -34,6 +34,7 @@
 #include "internal.h"
 #include "video.h"
 #include "veai.h"
+#include "veai_common.h"
 
 typedef struct VEAICPEContext {
     const AVClass *class;
@@ -69,43 +70,7 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAICPEContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    int logLevel = av_log_get_level();
-
-    if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
-        veai_disable_logging();
-    }
-    char devices[1024];
-    int device_count = veai_device_list(devices, 1024);
-    if(veai->device < -2 || veai->device > device_count ) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", veai->device, devices, device_count);
-        return AVERROR(EINVAL);
-    }
-    char modelString[10024];
-    int modelStringSize = veai_model_list(veai->model, 3, modelString, 10024);
-    if(modelStringSize > 0) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
-        return AVERROR(EINVAL);
-    } else if(modelStringSize < 0) {
-      av_log(NULL, AV_LOG_ERROR, "%s\n", modelString);
-      return AVERROR(EINVAL);
-    }
-    VideoProcessorInfo info;
-    info.basic.processorName = "cpe";
-    info.basic.modelName = veai->model;
-    info.basic.scale = 1;
-    info.basic.deviceIndex = veai->device;
-    info.basic.extraThreadCount = veai->extraThreads;
-    info.basic.canDownloadModel = veai->canDownloadModels;
-    info.basic.inputWidth = inlink->w;
-    info.basic.inputHeight = inlink->h;
-    info.basic.timebase = av_q2d(inlink->time_base);
-    info.basic.framerate = av_q2d(inlink->frame_rate);
-
-    outlink->w = inlink->w;
-    outlink->h = inlink->h;
-
-    veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d\n", veai->model, veai->device, veai->extraThreads);
+    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
@@ -119,29 +84,20 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     VEAICPEContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     IOBuffer ioBuffer;
-    av_log(NULL, AV_LOG_DEBUG, "About to filter frame %s %lf %lf %d\n", veai->model, TS2T(in->pts, inlink->time_base));
-    ioBuffer.inputBuffer = in->data[0];
-    ioBuffer.inputLinesize = in->linesize[0];
-    ioBuffer.inputTS = in->pts;
-    if(veai->pFrameProcessor == NULL) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed, frame processor has not been created");
-        return AVERROR(ENOSYS);
-    }
+    veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
 
     float transform[4] = {0,0,0,0};
-    ioBuffer.outputBuffer = transform;
+    ioBuffer.outputBuffer = (unsigned char *)transform;
     ioBuffer.outputLinesize = sizeof(float)*4;
-    ioBuffer.frameType = FrameTypeNormal;
-    int ignoreValue = veai->firstFrame;
-    if(veai->firstFrame) {
-      ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
-      veai->firstFrame = 0;
-    }
-    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
+
+    if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
+
+    int ignoreValue = veai->firstFrame;
+    veai->firstFrame = 0;
     if(ignoreValue)
       return ff_filter_frame(outlink, in);
     av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);

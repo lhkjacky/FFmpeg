@@ -33,24 +33,24 @@
 #include "formats.h"
 #include "internal.h"
 #include "video.h"
-#include "veai.h"
+#include "veai_common.h"
 
 typedef struct  {
     const AVClass *class;
     char *model;
     int device, extraThreads;
-    double fps;
+    double slowmo;
     int canDownloadModels;
     void* pFrameProcessor;
-    int firstFrame;
     unsigned int count;
+    double fpsFactor;
 } VEAIFIContext;
 
 #define OFFSET(x) offsetof(VEAIFIContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 static const AVOption veai_fi_options[] = {
-    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="aaa-9"}, .flags = FLAGS },
-    { "slow",  "Output fps",  OFFSET(fps),  AV_OPT_TYPE_DOUBLE, {.dbl=2.0}, 0.1, 100, FLAGS, "fps" },
+    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="chr-1"}, .flags = FLAGS },
+    { "slowmo",  "Output fps",  OFFSET(slowmo),  AV_OPT_TYPE_DOUBLE, {.dbl=2.0}, 0.1, 16, FLAGS, "slowmo" },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
@@ -61,8 +61,7 @@ AVFILTER_DEFINE_CLASS(veai_fi);
 
 static av_cold int init(AVFilterContext *ctx) {
   VEAIFIContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d %d %lf\n", veai->model, veai->device, veai->extraThreads, veai->fps);
-  veai->firstFrame = 1;
+  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d %d %lf\n", veai->model, veai->device, veai->extraThreads, veai->slowmo);
   veai->count = 0;
   return 0;
 }
@@ -71,43 +70,7 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAIFIContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    int logLevel = av_log_get_level();
-
-    if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
-        veai_disable_logging();
-    }
-    char devices[1024];
-    int device_count = veai_device_list(devices, 1024);
-    if(veai->device < -2 || veai->device > device_count ) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", veai->device, devices, device_count);
-        return AVERROR(EINVAL);
-    }
-    char modelString[10024];
-    int modelStringSize = veai_model_list(veai->model, 1, modelString, 10024);
-    if(modelStringSize > 0) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
-        return AVERROR(EINVAL);
-    } else if(modelStringSize < 0) {
-      av_log(NULL, AV_LOG_ERROR, "%s\n", modelString);
-      return AVERROR(EINVAL);
-    }
-    VideoProcessorInfo info;
-    info.basic.processorName = "fi";
-    info.basic.modelName = veai->model;
-    info.basic.scale = 1;
-    info.basic.deviceIndex = veai->device;
-    info.basic.extraThreadCount = veai->extraThreads;
-    info.basic.canDownloadModel = veai->canDownloadModels;
-    info.basic.inputWidth = inlink->w;
-    info.basic.inputHeight = inlink->h;
-    info.basic.timebase = av_q2d(inlink->time_base);
-    info.basic.framerate = av_q2d(inlink->frame_rate);
-
-    outlink->w = inlink->w;
-    outlink->h = inlink->h;
-
-    veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d %lf", veai->model, veai->device, veai->extraThreads, veai->fps);
+    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"fi", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
@@ -123,40 +86,77 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    static int count = 1;
-     // pts = av_rescale(avf_out->pts, (int64_t) ALPHA_MAX * outlink->time_base.num * inlink->time_base.den,
-     //                               (int64_t)             outlink->time_base.den * inlink->time_base.num);
-    av_log(NULL, AV_LOG_VERBOSE, "Handling frame %d %lf\n", count++, TS2T(in->pts, inlink->time_base));
-    ioBuffer.inputBuffer = in->data[0];
-    ioBuffer.inputLinesize = in->linesize[0];
-    ioBuffer.inputTS = in->pts;
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
-    if (!out) {
-        av_frame_free(&in);
-        return AVERROR(ENOMEM);
-    }
-
-    ioBuffer.outputBuffer = out->data[0];
-    ioBuffer.outputLinesize = out->linesize[0];
-    ioBuffer.frameType = FrameTypeNormal;
-    if(veai->firstFrame) {
-      ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
-      veai->firstFrame = 0;
-    }
-    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
+    veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->count == 0);
+    if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
+    // while(position < framePos) {
+    //     parameters["position"] = (position - (int)position);
+    //
+    //     // if(position < framePos - (1 - _fpsFactor * 0.3)) {
+    //     //     qInfo() << "Using previous frame for" << oFrame.framePos << position;
+    //     //     output = oFrame.outFrame;
+    //     // } else if(position > framePos - _fpsFactor * 0.3) {
+    //     //     qInfo() << "Using current frame for" << position;
+    //     //     output = frame;
+    //     // } else {
+    //     //     AIPRINT_DURATION("Process" << QString::number(position, 'g', 5) << "Frame:", imgPTime, output = processEmpty(parameters))
+    //     // }
+    //     oFrame.framePos = position;
+    //     oFrame.outFrame = output.clone();
+    //     _lastFramePosition = position;
+    //     position+=_fpsFactor;
+    //
+    // }
     av_frame_copy_props(out, in);
     out->pts = ioBuffer.outputTS;
-    av_log(NULL, AV_LOG_VERBOSE, "Handling frame BBB %d %lf %lf\n", count++, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
+    veai->count++;
+    if(ioBuffer.outputTS < 0) {
+      av_log(NULL, AV_LOG_DEBUG, "Ignoring frame %d %s %lf %lf\n", veai->count++, veai->model, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
+      return 0;
+    }
+    av_log(NULL, AV_LOG_DEBUG, "Finished processing frame %d %s %lf %lf\n", veai->count++, veai->model, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
     return ff_filter_frame(outlink, out);
 }
 
+// void processManyFrames() {
+//
+//
+//         double position = ceil((framePos - 1) / _fpsFactor) * _fpsFactor;
+//         Mat block, output;
+//         bool first = true;
+//         auto oFrame = _frames.front();
+//         if(_lastFramePosition >= position - _fpsFactor * 0.3) {
+//             position+= _fpsFactor;
+//         }
+//
+//         while(position < framePos) {
+//             parameters["position"] = (position - (int)position);
+//
+//             if(position < framePos - (1 - _fpsFactor * 0.3)) {
+//                 qInfo() << "Using previous frame for" << oFrame.framePos << position;
+//                 output = oFrame.outFrame;
+//             } else if(position > framePos - _fpsFactor * 0.3) {
+//                 qInfo() << "Using current frame for" << position;
+//                 output = frame;
+//             } else {
+//                 AIPRINT_DURATION("Process" << QString::number(position, 'g', 5) << "Frame:", imgPTime, output = processEmpty(parameters))
+//             }
+//             oFrame.framePos = position;
+//             oFrame.outFrame = output.clone();
+//             _lastFramePosition = position;
+//             position+=_fpsFactor;
+//
+//         }
+// }
+
+
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAIFIContext *veai = ctx->priv;
-    veai_destroy(veai->pFrameProcessor);
+    if(veai->pFrameProcessor)
+      veai_destroy(veai->pFrameProcessor);
 }
 
 static const AVFilterPad veai_fi_inputs[] = {

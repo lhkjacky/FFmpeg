@@ -34,28 +34,7 @@
 #include "internal.h"
 #include "video.h"
 #include "veai.h"
-
-#define PLANE_R 0x4
-#define PLANE_G 0x1
-#define PLANE_B 0x2
-#define PLANE_Y 0x1
-#define PLANE_U 0x2
-#define PLANE_V 0x4
-#define PLANE_A 0x8
-
-enum FilterMode {
-    MODE_WIRES,
-    MODE_COLORMIX,
-    MODE_CANNY,
-    NB_MODE
-};
-
-struct plane_info {
-    uint8_t  *tmpbuf;
-    uint16_t *gradients;
-    char     *directions;
-    int      width, height;
-};
+#include "veai_common.h"
 
 typedef struct VEAIUpContext {
     const AVClass *class;
@@ -102,50 +81,12 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAIUpContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    int logLevel = av_log_get_level();
-
-    if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
-        veai_disable_logging();
-    }
-    if(veai->scale != 1 && veai->scale != 2 && veai->scale !=4 ) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for scale, only 1,2,4 allowed for scale\n", veai->scale);
-        return AVERROR(EINVAL);
-    }
-    char devices[1024];
-    int device_count = veai_device_list(devices, 1024);
-    if(veai->device < -2 || veai->device > device_count ) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", veai->device, devices, device_count);
-        return AVERROR(EINVAL);
-    }
-    char modelString[10024];
-    int modelStringSize = veai_model_list(veai->model, 1, modelString, 10024);
-    if(modelStringSize > 0) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", veai->model, modelString);
-        return AVERROR(EINVAL);
-    } else if(modelStringSize < 0) {
-      av_log(NULL, AV_LOG_ERROR, "%s\n", modelString);
-      return AVERROR(EINVAL);
-    }
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
-    VideoProcessorInfo info;
-    info.basic.processorName = "up";
-    info.basic.modelName = veai->model;
-    info.basic.scale = veai->scale;
-    info.basic.deviceIndex = veai->device;
-    info.basic.extraThreadCount = veai->extraThreads;
-    info.basic.canDownloadModel = veai->canDownloadModels;
-    info.basic.inputWidth = inlink->w;
-    info.basic.inputHeight = inlink->h;
-    info.basic.timebase = av_q2d(inlink->time_base);
-    info.basic.framerate = av_q2d(inlink->frame_rate);
-
-    outlink->w = inlink->w*veai->scale;
-    outlink->h = inlink->h*veai->scale;
-
-    memcpy(info.modelParameters, parameter_values, sizeof(info.modelParameters));
-    veai->pFrameProcessor = veai_create(&info);
-    av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %d %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device, veai->extraThreads,
+    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads,
+                                                    veai->scale, veai->canDownloadModels, parameter_values, 6);
+    av_log(ctx, AV_LOG_VERBOSE, "Here init with params: %s %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device,
           veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
+
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
@@ -160,31 +101,14 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    av_log(NULL, AV_LOG_DEBUG, "About to filter frame %d %s %u %lf %lf %d\n", veai->count, veai->model, veai->scale, TS2T(in->pts, inlink->time_base), veai->nb_frames, veai->eof);
-    ioBuffer.inputBuffer = in->data[0];
-    ioBuffer.inputLinesize = in->linesize[0];
-    ioBuffer.inputTS = in->pts;
-    out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
-    if (!out) {
-        av_frame_free(&in);
-        return AVERROR(ENOMEM);
-    }
-    if(veai->pFrameProcessor == NULL) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed, frame processor has not been created");
-        return AVERROR(ENOSYS);
-    }
-    ioBuffer.outputBuffer = out->data[0];
-    ioBuffer.outputLinesize = out->linesize[0];
-    ioBuffer.frameType = FrameTypeNormal;
-    if(veai->firstFrame) {
-      ioBuffer.frameType = ioBuffer.frameType | FrameTypeStart;
-      veai->firstFrame = 0;
-    }
-    if (veai_process(veai->pFrameProcessor,  &ioBuffer)) {
+    veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
+    out = veai_prepareIOBufferOutput(outlink, &ioBuffer);
+    if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
+    veai->firstFrame = 0;
     av_frame_copy_props(out, in);
     out->pts = ioBuffer.outputTS;
     if(ioBuffer.outputTS < 0) {
@@ -197,7 +121,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAIUpContext *veai = ctx->priv;
-    av_log(NULL, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
+    av_log(NULL, AV_LOG_DEBUG, "Uninit called for %s %d\n", veai->model, veai->pFrameProcessor == NULL);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
 }
