@@ -82,9 +82,9 @@ static int config_props(AVFilterLink *outlink) {
     VEAIUpContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
-    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads,
+    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads,
                                                     veai->scale, veai->canDownloadModels, parameter_values, 6, ctx);
-    return veai->pFrameProcessor ? AVERROR(EINVAL) : 0;
+    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -98,8 +98,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
-    out = veai_prepareIOBufferOutput(outlink, &ioBuffer);
+    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
+    out = ff_veai_prepareIOBufferOutput(outlink, &ioBuffer);
     if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);

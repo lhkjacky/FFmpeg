@@ -70,7 +70,7 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAIFIContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"fi", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0, ctx);
+    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"fi", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0, ctx);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
@@ -86,7 +86,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->count == 0);
+    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->count == 0);
     if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
