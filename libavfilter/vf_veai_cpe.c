@@ -70,7 +70,7 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAICPEContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0);
+    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0, ctx);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 

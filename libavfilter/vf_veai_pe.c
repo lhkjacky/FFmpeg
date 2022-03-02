@@ -67,7 +67,7 @@ static int config_props(AVFilterLink *outlink) {
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
 
-    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeCamPoseEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0);
+    veai->pFrameProcessor = veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeCamPoseEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 

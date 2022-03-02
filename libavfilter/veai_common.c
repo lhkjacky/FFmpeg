@@ -1,18 +1,18 @@
 #include "veai_common.h"
 
-int veai_checkDevice(int deviceIndex) {
+int veai_checkDevice(int deviceIndex, AVFilterContext* ctx) {
   char devices[1024];
   int device_count = veai_device_list(devices, 1024);
   if(deviceIndex < -2 || deviceIndex > device_count ) {
-      av_log(NULL, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", deviceIndex, devices, device_count);
+      av_log(ctx, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", deviceIndex, devices, device_count);
       return AVERROR(EINVAL);
   }
   return 0;
 }
 
-int veai_checkScale(int scale) {
+int veai_checkScale(int scale, AVFilterContext* ctx) {
   if(scale != 1 && scale != 2 && scale !=4 ) {
-      av_log(NULL, AV_LOG_ERROR, "Invalid value %d for scale, only 1,2,4 allowed for scale\n", scale);
+      av_log(ctx, AV_LOG_ERROR, "Invalid value %d for scale, only 1,2,4 allowed for scale\n", scale);
       return AVERROR(EINVAL);
   }
   return 0;
@@ -25,25 +25,23 @@ void veai_handleLogging() {
   }
 }
 
-int veai_checkModel(char* modelName, ModelType modelType) {
-  av_log(NULL, AV_LOG_DEBUG, "Checking value %s for model, model should be in the following list\n", modelName);
+int veai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ctx) {
   char modelString[10024];
   int modelStringSize = veai_model_list(modelName, modelType, modelString, 10024);
-
   if(modelStringSize > 0) {
-      av_log(NULL, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", modelName, modelString);
+      av_log(ctx, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", modelName, modelString);
       return AVERROR(EINVAL);
   } else if(modelStringSize < 0) {
-    av_log(NULL, AV_LOG_ERROR, "Some other error:%s\n", modelString);
+    av_log(ctx, AV_LOG_ERROR, "Some other error:%s\n", modelString);
     return AVERROR(EINVAL);
   }
   return 0;
 }
 
 void* veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
-                            int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount) {
+                            int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
   veai_handleLogging();
-  if(veai_checkModel(modelName, modelType) || veai_checkDevice(deviceIndex) || veai_checkScale(scale)) {
+  if(veai_checkModel(modelName, modelType, ctx) || veai_checkDevice(deviceIndex, ctx) || veai_checkScale(scale, ctx)) {
     return NULL;
   }
   VideoProcessorInfo info;
@@ -62,7 +60,7 @@ void* veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *pr
   }
   outlink->w = inlink->w*scale;
   outlink->h = inlink->h*scale;
-  av_log(NULL, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info.basic.processorName, info.basic.modelName, info.basic.scale, info.basic.deviceIndex,
+  av_log(ctx, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info.basic.processorName, info.basic.modelName, info.basic.scale, info.basic.deviceIndex,
           info.basic.extraThreadCount, info.basic.canDownloadModel, info.basic.inputWidth, info.basic.inputHeight, info.basic.timebase, info.basic.framerate);
   return veai_create(&info);
 }
