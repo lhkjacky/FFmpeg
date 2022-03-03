@@ -106,13 +106,15 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         return AVERROR(ENOSYS);
     }
     veai->firstFrame = 0;
+    double its = TS2T(in->pts, inlink->time_base);
     av_frame_copy_props(out, in);
+    av_frame_free(&in);
     out->pts = ioBuffer.outputTS;
     if(ioBuffer.outputTS < 0) {
-      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %d %s %u %lf %lf\n", veai->count++, veai->model, veai->scale, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
+      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %d %s %u %lf %lf\n", veai->count++, veai->model, veai->scale, its, TS2T(ioBuffer.outputTS, outlink->time_base));
       return 0;
     }
-    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %d %s %u %lf %lf\n", veai->count++, veai->model, veai->scale, TS2T(in->pts, inlink->time_base), TS2T(ioBuffer.outputTS, outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %d %s %u %lf %lf\n", veai->count++, veai->model, veai->scale, its, TS2T(ioBuffer.outputTS, outlink->time_base));
     return ff_filter_frame(outlink, out);
 }
 
