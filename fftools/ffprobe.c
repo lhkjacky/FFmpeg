@@ -38,6 +38,7 @@
 #include "libavutil/hash.h"
 #include "libavutil/hdr_dynamic_metadata.h"
 #include "libavutil/mastering_display_metadata.h"
+#include "libavutil/hdr_dynamic_vivid_metadata.h"
 #include "libavutil/dovi_meta.h"
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
@@ -2118,6 +2119,74 @@ static void print_dynamic_hdr10_plus(WriterContext *w, const AVDynamicHDRPlus *m
     }
 }
 
+static void print_dynamic_hdr_vivid(WriterContext *w, const AVDynamicHDRVivid *metadata)
+{
+    if (!metadata)
+        return;
+    print_int("system_start_code", metadata->system_start_code);
+    print_int("num_windows", metadata->num_windows);
+
+    for (int n = 0; n < metadata->num_windows; n++) {
+        const AVHDRVividColorTransformParams *params = &metadata->params[n];
+
+        print_q("minimum_maxrgb", params->minimum_maxrgb, '/');
+        print_q("average_maxrgb", params->average_maxrgb, '/');
+        print_q("variance_maxrgb", params->variance_maxrgb, '/');
+        print_q("maximum_maxrgb", params->maximum_maxrgb, '/');
+    }
+
+    for (int n = 0; n < metadata->num_windows; n++) {
+        const AVHDRVividColorTransformParams *params = &metadata->params[n];
+
+        print_int("tone_mapping_mode_flag", params->tone_mapping_mode_flag);
+        print_int("tone_mapping_param_num", params->tone_mapping_param_num);
+        if (params->tone_mapping_mode_flag) {
+            for (int i = 0; i < params->tone_mapping_param_num; i++) {
+                const AVHDRVividColorToneMappingParams *tm_params = &params->tm_params[i];
+
+                print_q("targeted_system_display_maximum_luminance",
+                        tm_params->targeted_system_display_maximum_luminance, '/');
+                print_int("base_enable_flag", tm_params->base_enable_flag);
+                if (tm_params->base_enable_flag) {
+                    print_q("base_param_m_p", tm_params->base_param_m_p, '/');
+                    print_q("base_param_m_m", tm_params->base_param_m_m, '/');
+                    print_q("base_param_m_a", tm_params->base_param_m_a, '/');
+                    print_q("base_param_m_b", tm_params->base_param_m_b, '/');
+                    print_q("base_param_m_n", tm_params->base_param_m_n, '/');
+
+                    print_int("base_param_k1", tm_params->base_param_k1);
+                    print_int("base_param_k2", tm_params->base_param_k2);
+                    print_int("base_param_k3", tm_params->base_param_k3);
+                    print_int("base_param_Delta_enable_mode",
+                              tm_params->base_param_Delta_enable_mode);
+                    print_q("base_param_Delta", tm_params->base_param_Delta, '/');
+                }
+                print_int("3Spline_enable_flag", tm_params->three_Spline_enable_flag);
+                if (tm_params->three_Spline_enable_flag) {
+                    print_int("3Spline_num", tm_params->three_Spline_num);
+                    print_int("3Spline_TH_mode", tm_params->three_Spline_TH_mode);
+
+                    for (int j = 0; j < tm_params->three_Spline_num; j++) {
+                        print_q("3Spline_TH_enable_MB", tm_params->three_Spline_TH_enable_MB, '/');
+                        print_q("3Spline_TH_enable", tm_params->three_Spline_TH_enable, '/');
+                        print_q("3Spline_TH_Delta1", tm_params->three_Spline_TH_Delta1, '/');
+                        print_q("3Spline_TH_Delta2", tm_params->three_Spline_TH_Delta2, '/');
+                        print_q("3Spline_enable_Strength", tm_params->three_Spline_enable_Strength, '/');
+                    }
+                }
+            }
+        }
+
+        print_int("color_saturation_mapping_flag", params->color_saturation_mapping_flag);
+        if (params->color_saturation_mapping_flag) {
+            print_int("color_saturation_num", params->color_saturation_num);
+            for (int i = 0; i < params->color_saturation_num; i++) {
+                print_q("color_saturation_gain", params->color_saturation_gain[i], '/');
+            }
+        }
+    }
+}
+
 static void print_pkt_side_data(WriterContext *w,
                                 AVCodecParameters *par,
                                 const AVPacketSideData *side_data,
@@ -2537,6 +2606,9 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
                 print_int("size", sd->size);
             } else if (sd->type == AV_FRAME_DATA_DOVI_METADATA) {
                 print_dovi_metadata(w, (const AVDOVIMetadata *)sd->data);
+            } else if (sd->type == AV_FRAME_DATA_DYNAMIC_HDR_VIVID) {
+                AVDynamicHDRVivid *metadata = (AVDynamicHDRVivid *)sd->data;
+                print_dynamic_hdr_vivid(w, metadata);
             }
             writer_print_section_footer(w);
         }
@@ -2561,7 +2633,7 @@ static av_always_inline int process_frame(WriterContext *w,
     int ret = 0, got_frame = 0;
 
     clear_log(1);
-    if (dec_ctx && dec_ctx->codec) {
+    if (dec_ctx) {
         switch (par->codec_type) {
         case AVMEDIA_TYPE_VIDEO:
         case AVMEDIA_TYPE_AUDIO:
@@ -2730,8 +2802,11 @@ static int read_interval_packets(WriterContext *w, InputFile *ifile,
     //Flush remaining frames that are cached in the decoder
     for (i = 0; i < fmt_ctx->nb_streams; i++) {
         pkt->stream_index = i;
-        if (do_read_frames)
+        if (do_read_frames) {
             while (process_frame(w, ifile, frame, pkt, &(int){1}) > 0);
+            if (ifile->streams[i].dec_ctx)
+                avcodec_flush_buffers(ifile->streams[i].dec_ctx);
+        }
     }
 
 end:
@@ -2898,7 +2973,7 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         break;
     }
 
-    if (dec_ctx && dec_ctx->codec && dec_ctx->codec->priv_class && show_private_data) {
+    if (dec_ctx && dec_ctx->codec->priv_class && show_private_data) {
         const AVOption *opt = NULL;
         while (opt = av_opt_next(dec_ctx->priv_data,opt)) {
             uint8_t *str;
