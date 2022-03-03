@@ -324,6 +324,7 @@ External library support:
   --disable-securetransport disable Secure Transport, needed for TLS support
                            on OSX if openssl and gnutls are not used [autodetect]
   --enable-vapoursynth     enable VapourSynth demuxer [no]
+  --enable-veai            enable Topaz Video Enhance AI [no]
   --disable-vulkan         disable Vulkan code [autodetect]
   --disable-xlib           disable xlib [autodetect]
   --disable-zlib           disable zlib [autodetect]
@@ -1880,6 +1881,7 @@ EXTERNAL_LIBRARY_LIST="
     openssl
     pocketsphinx
     vapoursynth
+    veai
 "
 
 HWACCEL_AUTODETECT_LIBRARY_LIST="
@@ -3723,6 +3725,14 @@ transpose_vulkan_filter_deps="vulkan spirv_compiler"
 unsharp_opencl_filter_deps="opencl"
 uspp_filter_deps="gpl avcodec"
 vaguedenoiser_filter_deps="gpl"
+veai_up_filter_select="veai"
+veai_up_filter_deps="veai"
+veai_fi_filter_select="veai"
+veai_fi_filter_deps="veai"
+veai_pe_filter_select="veai"
+veai_pe_filter_deps="veai"
+veai_cpe_filter_select="veai"
+veai_cpe_filter_deps="veai"
 vflip_vulkan_filter_deps="vulkan spirv_compiler"
 vidstabdetect_filter_deps="libvidstab"
 vidstabtransform_filter_deps="libvidstab"
@@ -6703,6 +6713,7 @@ enabled rkmpp             && { require_pkg_config rkmpp rockchip_mpp  rockchip/r
                                  die "ERROR: rkmpp requires --enable-libdrm"; }
                              }
 enabled vapoursynth       && require_pkg_config vapoursynth "vapoursynth-script >= 42" VSScript.h vsscript_init
+enabled veai              && require_headers veai.h && require veai "veai.h" veai_create "-lveai"
 
 
 if enabled gcrypt; then
