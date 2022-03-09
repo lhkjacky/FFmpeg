@@ -2267,6 +2267,7 @@ SYSTEM_FUNCS="
     CommandLineToArgvW
     fcntl
     getaddrinfo
+    getauxval
     gethrtime
     getopt
     GetModuleHandle
