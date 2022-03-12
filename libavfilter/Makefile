@@ -503,6 +503,7 @@ OBJS-$(CONFIG_VEAI_UP_FILTER)                += vf_veai_up.o veai_common.o
 OBJS-$(CONFIG_VEAI_FI_FILTER)                += vf_veai_fi.o veai_common.o
 OBJS-$(CONFIG_VEAI_PE_FILTER)                += vf_veai_pe.o veai_common.o
 OBJS-$(CONFIG_VEAI_CPE_FILTER)               += vf_veai_cpe.o veai_common.o
+OBJS-$(CONFIG_VEAI_STB_FILTER)               += vf_veai_stb.o veai_common.o
 OBJS-$(CONFIG_VECTORSCOPE_FILTER)            += vf_vectorscope.o
 OBJS-$(CONFIG_VFLIP_FILTER)                  += vf_vflip.o
 OBJS-$(CONFIG_VFLIP_VULKAN_FILTER)           += vf_flip_vulkan.o vulkan.o
