@@ -55,7 +55,7 @@ static const AVOption veai_stb_options[] = {
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
     { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS },
     { "filler", "Filler output path", OFFSET(filler), AV_OPT_TYPE_STRING, {.str="./"}, .flags = FLAGS },
-    { "smoothness",  "Amount of motion smoothness for the entire video, higher the value for the prediction",  OFFSET(smoothness),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0.5, 9.99, FLAGS, "smoothness" },
+    { "smoothness", "Amount of smoothness to be applied on the camera trajectory to stabilize the video",  OFFSET(smoothness),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0.0, 16.0, FLAGS, "smoothness" },
     { NULL }
 };
 
