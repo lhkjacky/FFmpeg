@@ -107,7 +107,7 @@ static int config_input(AVFilterLink *inlink)
     char *colors, *saveptr = NULL;
 
     s->nb_samples = FFMAX(1, av_rescale(inlink->sample_rate, s->frame_rate.den, s->frame_rate.num));
-    s->nb_channels = inlink->channels;
+    s->nb_channels = inlink->ch_layout.nb_channels;
     s->depth = inlink->format == AV_SAMPLE_FMT_S16P ? 16 : 32;
 
     s->fg = av_malloc_array(s->nb_channels, 4 * sizeof(*s->fg));
@@ -148,9 +148,9 @@ static int config_output(AVFilterLink *outlink)
 }
 
 #define BARS(type, depth, one)                                              \
-    for (int ch = 0; ch < inlink->channels; ch++) {                         \
+    for (int ch = 0; ch < inlink->ch_layout.nb_channels; ch++) {            \
         const type *in = (const type *)insamples->extended_data[ch];        \
-        const int w = outpicref->width / inlink->channels;                  \
+        const int w = outpicref->width / inlink->ch_layout.nb_channels;     \
         const int h = outpicref->height / depth;                            \
         const uint32_t color = AV_RN32(&s->fg[4 * ch]);                     \
                                                                             \
@@ -174,9 +174,9 @@ static int config_output(AVFilterLink *outlink)
         }                                                                   \
     }
 
-#define TRACE(type, depth, one)                                             \
-    for (int ch = 0; ch < inlink->channels; ch++) {                         \
-        const int w = outpicref->width / inlink->channels;                  \
+#define DO_TRACE(type, depth, one)                                          \
+    for (int ch = 0; ch < inlink->ch_layout.nb_channels; ch++) {            \
+        const int w = outpicref->width / inlink->ch_layout.nb_channels;     \
         const type *in = (const type *)insamples->extended_data[ch];        \
         const int wb = w / depth;                                           \
         int wv;                                                             \
@@ -238,18 +238,18 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamples)
 
     switch (insamples->format) {
     case AV_SAMPLE_FMT_U8P:
-        if (s->mode == 0) { BARS(uint8_t,   8, 1) } else { TRACE(uint8_t,   8, 1) }
+        if (s->mode == 0) { BARS(uint8_t,   8, 1) } else { DO_TRACE(uint8_t,   8, 1) }
         break;
     case AV_SAMPLE_FMT_S16P:
-        if (s->mode == 0) { BARS(uint16_t, 16, 1) } else { TRACE(uint16_t, 16, 1) }
+        if (s->mode == 0) { BARS(uint16_t, 16, 1) } else { DO_TRACE(uint16_t, 16, 1) }
         break;
     case AV_SAMPLE_FMT_FLTP:
     case AV_SAMPLE_FMT_S32P:
-        if (s->mode == 0) { BARS(uint32_t, 32, 1U) } else { TRACE(uint32_t, 32, 1U) }
+        if (s->mode == 0) { BARS(uint32_t, 32, 1U) } else { DO_TRACE(uint32_t, 32, 1U) }
         break;
     case AV_SAMPLE_FMT_DBLP:
     case AV_SAMPLE_FMT_S64P:
-        if (s->mode == 0) { BARS(uint64_t, 64, 1ULL) } else { TRACE(uint64_t, 64, 1ULL) }
+        if (s->mode == 0) { BARS(uint64_t, 64, 1ULL) } else { DO_TRACE(uint64_t, 64, 1ULL) }
         break;
     }
 

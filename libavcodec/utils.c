@@ -577,6 +577,8 @@ enum AVCodecID av_get_pcm_codec(enum AVSampleFormat fmt, int be)
 int av_get_bits_per_sample(enum AVCodecID codec_id)
 {
     switch (codec_id) {
+    case AV_CODEC_ID_DFPWM:
+        return 1;
     case AV_CODEC_ID_ADPCM_SBPRO_2:
         return 2;
     case AV_CODEC_ID_ADPCM_SBPRO_3:
@@ -802,8 +804,16 @@ static int get_audio_frame_duration(enum AVCodecID id, int sr, int ch, int ba,
 
 int av_get_audio_frame_duration(AVCodecContext *avctx, int frame_bytes)
 {
-    int duration = get_audio_frame_duration(avctx->codec_id, avctx->sample_rate,
-                                    avctx->channels, avctx->block_align,
+   int channels = avctx->ch_layout.nb_channels;
+   int duration;
+#if FF_API_OLD_CHANNEL_LAYOUT
+FF_DISABLE_DEPRECATION_WARNINGS
+    if (!channels)
+        channels = avctx->channels;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+    duration = get_audio_frame_duration(avctx->codec_id, avctx->sample_rate,
+                                    channels, avctx->block_align,
                                     avctx->codec_tag, avctx->bits_per_coded_sample,
                                     avctx->bit_rate, avctx->extradata, avctx->frame_size,
                                     frame_bytes);
@@ -812,8 +822,16 @@ int av_get_audio_frame_duration(AVCodecContext *avctx, int frame_bytes)
 
 int av_get_audio_frame_duration2(AVCodecParameters *par, int frame_bytes)
 {
-    int duration = get_audio_frame_duration(par->codec_id, par->sample_rate,
-                                    par->channels, par->block_align,
+   int channels = par->ch_layout.nb_channels;
+   int duration;
+#if FF_API_OLD_CHANNEL_LAYOUT
+FF_DISABLE_DEPRECATION_WARNINGS
+    if (!channels)
+        channels = par->channels;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+    duration = get_audio_frame_duration(par->codec_id, par->sample_rate,
+                                    channels, par->block_align,
                                     par->codec_tag, par->bits_per_coded_sample,
                                     par->bit_rate, par->extradata, par->frame_size,
                                     frame_bytes);
