@@ -12,7 +12,7 @@ class conanRecipe(ConanFile):
 
 
     def requirements(self):
-        self.requires("veai/TODO: version here")
+        self.requires("videoai/0.0.1@gregory/testing")
 
     def imports(self):
         if self.settings.os == "Windows":
