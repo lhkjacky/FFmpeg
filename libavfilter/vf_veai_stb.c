@@ -36,48 +36,51 @@
 #include "veai.h"
 #include "veai_common.h"
 
-typedef struct VEAICPEContext {
+typedef struct VEAIStbContext {
     const AVClass *class;
-    char *model, *filename;
+    char *model, *filename, *filler;
     int device, extraThreads;
     int canDownloadModels;
     void* pFrameProcessor;
     int firstFrame;
-    unsigned int counter;
-} VEAICPEContext;
+    double smoothness;
+} VEAIStbContext;
 
-#define OFFSET(x) offsetof(VEAICPEContext, x)
+#define OFFSET(x) offsetof(VEAIStbContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
-static const AVOption veai_cpe_options[] = {
-    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="cam-1"}, .flags = FLAGS },
-    { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS },
+static const AVOption veai_stb_options[] = {
+    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="ref-1"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
+    { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS },
+    { "filler", "Filler output path", OFFSET(filler), AV_OPT_TYPE_STRING, {.str="./"}, .flags = FLAGS },
+    { "smoothness", "Amount of smoothness to be applied on the camera trajectory to stabilize the video",  OFFSET(smoothness),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0.0, 16.0, FLAGS, "smoothness" },
     { NULL }
 };
 
-AVFILTER_DEFINE_CLASS(veai_cpe);
+AVFILTER_DEFINE_CLASS(veai_stb);
 
 static av_cold int init(AVFilterContext *ctx) {
-  VEAICPEContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
+  VEAIStbContext *veai = ctx->priv;
+  av_log(ctx, AV_LOG_VERBOSE, "Here init with params: %s %d %s %s %lf\n", veai->model, veai->device, veai->filename, veai->filler, veai->smoothness);
   veai->firstFrame = 1;
-  veai->counter = 0;
   return 0;
 }
 
 static int config_props(AVFilterLink *outlink) {
-    AVFilterContext *ctx = outlink->src;
-    VEAICPEContext *veai = ctx->priv;
-    AVFilterLink *inlink = ctx->inputs[0];
-    VideoProcessorInfo info;
-    info.options[0] = veai->filename;
-    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0, ctx)) {
-      return AVERROR(EINVAL);
-    }
-    veai->pFrameProcessor = veai_create(&info);
-    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
+  AVFilterContext *ctx = outlink->src;
+  VEAIStbContext *veai = ctx->priv;
+  AVFilterLink *inlink = ctx->inputs[0];
+  VideoProcessorInfo info;
+  info.options[0] = veai->filename;
+  info.options[1] = veai->filler;
+  float smoothness = veai->smoothness;
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, 1, veai->canDownloadModels, &smoothness, 1, ctx)) {
+    return AVERROR(EINVAL);
+  }
+  veai->pFrameProcessor = veai_create(&info);
+  return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -87,39 +90,38 @@ static const enum AVPixelFormat pix_fmts[] = {
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
-    VEAICPEContext *veai = ctx->priv;
+    VEAIStbContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
+    AVFrame *out;
     IOBuffer ioBuffer;
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
-
-    float transform[4] = {0,0,0,0};
-    ioBuffer.outputBuffer = (unsigned char *)transform;
-    ioBuffer.outputLinesize = sizeof(float)*4;
-
-    if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
+    out = ff_veai_prepareIOBufferOutput(outlink, &ioBuffer);
+    if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-
-    int ignoreValue = veai->firstFrame;
     veai->firstFrame = 0;
-    if(ignoreValue)
-      return ff_filter_frame(outlink, in);
-    av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
-    return ff_filter_frame(outlink, in);
+    double its = TS2T(in->pts, inlink->time_base);
+    av_frame_copy_props(out, in);
+    av_frame_free(&in);
+    out->pts = ioBuffer.outputTS;
+    if(ioBuffer.outputTS < 0) {
+      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.outputTS, outlink->time_base));
+      return 0;
+    }
+    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.outputTS, outlink->time_base));
+    return ff_filter_frame(outlink, out);
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
-    VEAICPEContext *veai = ctx->priv;
-    float transform[4] = {0,0,0,0};
-    av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
-    av_log(NULL, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
+    VEAIStbContext *veai = ctx->priv;
+    av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %d\n", veai->model, veai->pFrameProcessor == NULL);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
 }
 
-static const AVFilterPad veai_cpe_inputs[] = {
+static const AVFilterPad veai_stb_inputs[] = {
     {
         .name         = "default",
         .type         = AVMEDIA_TYPE_VIDEO,
@@ -127,7 +129,7 @@ static const AVFilterPad veai_cpe_inputs[] = {
     },
 };
 
-static const AVFilterPad veai_cpe_outputs[] = {
+static const AVFilterPad veai_stb_outputs[] = {
     {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
@@ -135,15 +137,15 @@ static const AVFilterPad veai_cpe_outputs[] = {
     },
 };
 
-const AVFilter ff_vf_veai_cpe = {
-    .name          = "veai_cpe",
-    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI upscale models, parameters will only be applied to appropriate models"),
-    .priv_size     = sizeof(VEAICPEContext),
+const AVFilter ff_vf_veai_stb = {
+    .name          = "veai_stb",
+    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI stabilization models"),
+    .priv_size     = sizeof(VEAIStbContext),
     .init          = init,
     .uninit        = uninit,
-    FILTER_INPUTS(veai_cpe_inputs),
-    FILTER_OUTPUTS(veai_cpe_outputs),
+    FILTER_INPUTS(veai_stb_inputs),
+    FILTER_OUTPUTS(veai_stb_outputs),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .priv_class    = &veai_cpe_class,
+    .priv_class    = &veai_stb_class,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
 };

@@ -479,6 +479,7 @@ extern const AVFilter ff_vf_veai_up;
 extern const AVFilter ff_vf_veai_fi;
 extern const AVFilter ff_vf_veai_pe;
 extern const AVFilter ff_vf_veai_cpe;
+extern const AVFilter ff_vf_veai_stb;
 extern const AVFilter ff_vf_vectorscope;
 extern const AVFilter ff_vf_vflip;
 extern const AVFilter ff_vf_vflip_vulkan;

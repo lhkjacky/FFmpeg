@@ -38,30 +38,37 @@ int ff_veai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ct
   return 0;
 }
 
-void* ff_veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
+int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
                             int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
   ff_veai_handleLogging();
   if(ff_veai_checkModel(modelName, modelType, ctx) || ff_veai_checkDevice(deviceIndex, ctx) || ff_veai_checkScale(scale, ctx)) {
-    return NULL;
+    return 1;
   }
-  VideoProcessorInfo info;
-  info.basic.processorName = processorName;
-  info.basic.modelName = modelName;
-  info.basic.scale = scale;
-  info.basic.deviceIndex = deviceIndex;
-  info.basic.extraThreadCount = extraThreads;
-  info.basic.canDownloadModel = canDownloadModels;
-  info.basic.inputWidth = inlink->w;
-  info.basic.inputHeight = inlink->h;
-  info.basic.timebase = av_q2d(inlink->time_base);
-  info.basic.framerate = av_q2d(inlink->frame_rate);
+  info->basic.processorName = processorName;
+  info->basic.modelName = modelName;
+  info->basic.scale = scale;
+  info->basic.deviceIndex = deviceIndex;
+  info->basic.extraThreadCount = extraThreads;
+  info->basic.canDownloadModel = canDownloadModels;
+  info->basic.inputWidth = inlink->w;
+  info->basic.inputHeight = inlink->h;
+  info->basic.timebase = av_q2d(inlink->time_base);
+  info->basic.framerate = av_q2d(inlink->frame_rate);
   if(pParameters != NULL && parameterCount > 0) {
-    memcpy(info.modelParameters, pParameters, sizeof(float)*parameterCount);
+    memcpy(info->modelParameters, pParameters, sizeof(float)*parameterCount);
   }
   outlink->w = inlink->w*scale;
   outlink->h = inlink->h*scale;
-  av_log(ctx, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info.basic.processorName, info.basic.modelName, info.basic.scale, info.basic.deviceIndex,
-          info.basic.extraThreadCount, info.basic.canDownloadModel, info.basic.inputWidth, info.basic.inputHeight, info.basic.timebase, info.basic.framerate);
+  av_log(ctx, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info->basic.processorName, info->basic.modelName, info->basic.scale, info->basic.deviceIndex,
+          info->basic.extraThreadCount, info->basic.canDownloadModel, info->basic.inputWidth, info->basic.inputHeight, info->basic.timebase, info->basic.framerate);
+  return 0;
+}
+
+void* ff_veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
+                            int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
+  VideoProcessorInfo info;
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, processorName, modelName, modelType, deviceIndex, extraThreads, scale, canDownloadModels, pParameters, parameterCount, ctx))
+    return NULL;
   return veai_create(&info);
 }
 
