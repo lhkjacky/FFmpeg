@@ -61,7 +61,7 @@ AVFILTER_DEFINE_CLASS(veai_cpe);
 
 static av_cold int init(AVFilterContext *ctx) {
   VEAICPEContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
+  av_log(ctx, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
   veai->firstFrame = 1;
   veai->counter = 0;
   return 0;
@@ -97,7 +97,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     ioBuffer.output.lineSize = sizeof(float)*4;
 
     if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed");
+        av_log(ctx, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
@@ -106,15 +106,37 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     veai->firstFrame = 0;
     if(ignoreValue)
       return ff_filter_frame(outlink, in);
-    av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
+    av_log(ctx, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
     return ff_filter_frame(outlink, in);
+}
+
+static int request_frame(AVFilterLink *outlink) {
+    AVFilterContext *ctx = outlink->src;
+    VEAICPEContext *veai = ctx->priv;
+    int ret = ff_request_frame(ctx->inputs[0]);
+    if (ret == AVERROR_EOF) {
+        int i, n = veai_remaining_frames(veai->pFrameProcessor);
+        for(i=0;i<n;i++) {
+            VEAIBuffer oBuffer;
+            float transform[4] = {0,0,0,0};
+            oBuffer.pBuffer = (unsigned char *)transform;
+            oBuffer.lineSize = sizeof(float)*4;
+            if(veai->pFrameProcessor == NULL || veai_process_last(veai->pFrameProcessor, &oBuffer)) {
+                av_log(ctx, AV_LOG_ERROR, "The post flight processing has failed");
+                return AVERROR(ENOSYS);
+            }
+        }
+        av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", veai->model, veai->pFrameProcessor == NULL);
+    }
+
+    return ret;
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAICPEContext *veai = ctx->priv;
     float transform[4] = {0,0,0,0};
-    av_log(NULL, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
-    av_log(NULL, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
+    av_log(ctx, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
+    av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
 }
@@ -132,6 +154,7 @@ static const AVFilterPad veai_cpe_outputs[] = {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
         .config_props = config_props,
+        .request_frame = request_frame,
     },
 };
 

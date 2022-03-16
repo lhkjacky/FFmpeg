@@ -65,7 +65,7 @@ AVFILTER_DEFINE_CLASS(veai_fi);
 
 static av_cold int init(AVFilterContext *ctx) {
     VEAIFIContext *veai = ctx->priv;
-    av_log(NULL, AV_LOG_DEBUG, "Init with params: %s %d %d %lf %d/%d = %lf\n", veai->model, veai->device, veai->extraThreads, veai->slowmo, veai->frame_rate.num, veai->frame_rate.den, av_q2d(veai->frame_rate));
+    av_log(ctx, AV_LOG_DEBUG, "Init with params: %s %d %d %lf %d/%d = %lf\n", veai->model, veai->device, veai->extraThreads, veai->slowmo, veai->frame_rate.num, veai->frame_rate.den, av_q2d(veai->frame_rate));
     veai->count = 0;
     veai->position = 0;
     veai->previousPts = 0;
@@ -86,9 +86,9 @@ static int config_props(AVFilterLink *outlink) {
         outlink->frame_rate = inlink->frame_rate;
         veai->fpsFactor = 1/veai->slowmo;
     }
-    av_log(NULL, AV_LOG_DEBUG, "Set time base to %d/%d %lf -> %d/%d %lf\n", inlink->time_base.num, inlink->time_base.den, av_q2d(inlink->time_base), outlink->time_base.num, outlink->time_base.den, av_q2d(outlink->time_base));
-    av_log(NULL, AV_LOG_DEBUG, "Set frame rate to %lf -> %lf\n", av_q2d(inlink->frame_rate), av_q2d(outlink->frame_rate));
-    av_log(NULL, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", veai->fpsFactor, 1/veai->fpsFactor);
+    av_log(ctx, AV_LOG_DEBUG, "Set time base to %d/%d %lf -> %d/%d %lf\n", inlink->time_base.num, inlink->time_base.den, av_q2d(inlink->time_base), outlink->time_base.num, outlink->time_base.den, av_q2d(outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Set frame rate to %lf -> %lf\n", av_q2d(inlink->frame_rate), av_q2d(outlink->frame_rate));
+    av_log(ctx, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", veai->fpsFactor, 1/veai->fpsFactor);
 
     threshold = veai->fpsFactor*0.3;
     veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"fi", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, &threshold, 1, ctx);
@@ -111,16 +111,16 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     static int ocount = 0;
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->count == 0);
     if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed adding a frame\n");
+        av_log(ctx, AV_LOG_ERROR, "The processing has failed adding a frame\n");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
     while(veai->position < veai->count) {
         out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
         location = veai->position - (veai->count - 1);
-        av_log(NULL, AV_LOG_DEBUG, "Process frame %f on current %d at %f\n", veai->position, veai->count, location);
+        av_log(ctx, AV_LOG_DEBUG, "Process frame %f on current %d at %f\n", veai->position, veai->count, location);
         if(veai->pFrameProcessor == NULL || out == NULL || veai_interpolator_process(veai->pFrameProcessor, location, &ioBuffer)) {
-            av_log(NULL, AV_LOG_ERROR, "The processing has failed for intermediate frame\n");
+            av_log(ctx, AV_LOG_ERROR, "The processing has failed for intermediate frame\n");
             av_frame_free(&in);
             return AVERROR(ENOSYS);
         }
@@ -132,7 +132,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
             return AVERROR(ENOSYS);
         }
         veai->position += veai->fpsFactor;
-        av_log(NULL, AV_LOG_DEBUG, "Added frame at pts %lld %lf %d\n", out->pts, av_q2d(inlink->time_base)*out->pts, ocount);
+        av_log(ctx, AV_LOG_DEBUG, "Added frame at pts %lld %lf %d\n", out->pts, av_q2d(inlink->time_base)*out->pts, ocount);
     }
     veai->previousPts = in->pts;
     av_frame_free(&in);

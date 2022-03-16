@@ -43,7 +43,7 @@ typedef struct VEAIUpContext {
     int canDownloadModels;
     double preBlur, noise, details, halo, blur, compression;
     void* pFrameProcessor;
-    AVFrame* prevFrame;
+    AVFrame* previousFrame;
 } VEAIUpContext;
 
 #define OFFSET(x) offsetof(VEAIUpContext, x)
@@ -69,7 +69,7 @@ static av_cold int init(AVFilterContext *ctx) {
   VEAIUpContext *veai = ctx->priv;
   av_log(ctx, AV_LOG_VERBOSE, "Here init with params: %s %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device,
         veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
-  veai->prevFrame = NULL;
+  veai->previousFrame = NULL;
   return 0;
 }
 
@@ -94,7 +94,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->prevFrame == NULL);
+    static int count = 0;
+    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->previousFrame == NULL);
     out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
     if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
@@ -104,16 +105,32 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     double its = TS2T(in->pts, inlink->time_base);
     av_frame_copy_props(out, in);
     out->pts = ioBuffer.output.timestamp;
-    if(veai->prevFrame)
-      av_frame_free(&veai->prevFrame);
-    veai->prevFrame = in;
+    if(veai->previousFrame)
+      av_frame_free(&veai->previousFrame);
+    veai->previousFrame = in;
     if(ioBuffer.output.timestamp < 0) {
       av_frame_free(&out);
-      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %u %lf %lf\n", veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
+      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %d %s %u %lf %lf\n", count, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
       return 0;
     }
-    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %s %u %lf %lf\n", veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %d %s %u %lf %lf\n", count++, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
     return ff_filter_frame(outlink, out);
+}
+
+static int request_frame(AVFilterLink *outlink) {
+    AVFilterContext *ctx = outlink->src;
+    VEAIUpContext *veai = ctx->priv;
+    int ret = ff_request_frame(ctx->inputs[0]);
+    if (ret == AVERROR_EOF) {
+        if(ff_veai_handlePostFlight(veai->pFrameProcessor, outlink, veai->previousFrame, ctx)) {
+          av_log(NULL, AV_LOG_ERROR, "The postflight processing has failed");
+          av_frame_free(&veai->previousFrame);
+          return AVERROR(ENOSYS);
+        }
+        av_frame_free(&veai->previousFrame);
+        av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", veai->model, veai->pFrameProcessor == NULL);
+    }
+    return ret;
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
@@ -136,6 +153,7 @@ static const AVFilterPad veai_up_outputs[] = {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
         .config_props = config_props,
+        .request_frame = request_frame,
     },
 };
 
