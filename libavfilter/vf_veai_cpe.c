@@ -93,8 +93,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
 
     float transform[4] = {0,0,0,0};
-    ioBuffer.outputBuffer = (unsigned char *)transform;
-    ioBuffer.outputLinesize = sizeof(float)*4;
+    ioBuffer.output.pBuffer = (unsigned char *)transform;
+    ioBuffer.output.lineSize = sizeof(float)*4;
 
     if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");

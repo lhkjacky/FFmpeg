@@ -42,8 +42,8 @@ typedef struct VEAIStbContext {
     int device, extraThreads;
     int canDownloadModels;
     void* pFrameProcessor;
-    int firstFrame;
     double smoothness;
+    AVFrame* prevFrame;
 } VEAIStbContext;
 
 #define OFFSET(x) offsetof(VEAIStbContext, x)
@@ -64,7 +64,7 @@ AVFILTER_DEFINE_CLASS(veai_stb);
 static av_cold int init(AVFilterContext *ctx) {
   VEAIStbContext *veai = ctx->priv;
   av_log(ctx, AV_LOG_VERBOSE, "Here init with params: %s %d %s %s %lf\n", veai->model, veai->device, veai->filename, veai->filler, veai->smoothness);
-  veai->firstFrame = 1;
+  veai->prevFrame = NULL;
   return 0;
 }
 
@@ -94,23 +94,25 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
-    out = ff_veai_prepareIOBufferOutput(outlink, &ioBuffer);
+    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->prevFrame == NULL);
+    out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
     if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    veai->firstFrame = 0;
     double its = TS2T(in->pts, inlink->time_base);
     av_frame_copy_props(out, in);
-    av_frame_free(&in);
-    out->pts = ioBuffer.outputTS;
-    if(ioBuffer.outputTS < 0) {
-      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.outputTS, outlink->time_base));
+    out->pts = ioBuffer.output.timestamp;
+    if(veai->prevFrame)
+      av_frame_free(&veai->prevFrame);
+    veai->prevFrame = in;
+    if(ioBuffer.output.timestamp < 0) {
+      av_frame_free(&out);
+      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
       return 0;
     }
-    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.outputTS, outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
     return ff_filter_frame(outlink, out);
 }
 
