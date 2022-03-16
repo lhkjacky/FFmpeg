@@ -73,19 +73,45 @@ void* ff_veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char 
 }
 
 void ff_veai_prepareIOBufferInput(IOBuffer* ioBuffer, AVFrame *in, FrameType frameType, int isFirst) {
-  ioBuffer->inputBuffer = in->data[0];
-  ioBuffer->inputLinesize = in->linesize[0];
-  ioBuffer->inputTS = in->pts;
+  ioBuffer->input.pBuffer = in->data[0];
+  ioBuffer->input.lineSize = in->linesize[0];
+  ioBuffer->input.timestamp = in->pts;
   ioBuffer->frameType = frameType | (isFirst ? FrameTypeStart : FrameTypeNone);
 }
 
-AVFrame* ff_veai_prepareIOBufferOutput(AVFilterLink *outlink, IOBuffer* ioBuffer) {
+AVFrame* ff_veai_prepareBufferOutput(AVFilterLink *outlink, VEAIBuffer* oBuffer) {
   AVFrame* out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
   if (!out) {
       av_log(NULL, AV_LOG_ERROR, "The processing has failed, unable to create output buffer of size:%dx%d\n", outlink->w, outlink->h);
       return NULL;
   }
-  ioBuffer->outputBuffer = out->data[0];
-  ioBuffer->outputLinesize = out->linesize[0];
+  oBuffer->pBuffer = out->data[0];
+  oBuffer->lineSize = out->linesize[0];
   return out;
+}
+
+int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
+    int i, n = veai_remaining_frames(pProcessor);
+    for(i=0;i<n;i++) {
+        VEAIBuffer oBuffer;
+        AVFrame *out = ff_veai_prepareBufferOutput(outlink, &oBuffer);
+        if(pProcessor == NULL || out == NULL ||veai_process_last(pProcessor, &oBuffer)) {
+            av_log(ctx, AV_LOG_ERROR, "The processing has failed");
+            av_frame_free(&in);
+            return AVERROR(ENOSYS);
+        }
+        av_frame_copy_props(out, in);
+        out->pts = oBuffer.timestamp;
+        if(oBuffer.timestamp < 0) {
+          av_frame_free(&out);
+          av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
+          return AVERROR(ENOSYS);
+        }
+        av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
+        int code = ff_filter_frame(outlink, out);
+        if(code) {
+          return code;
+        }
+    }
+    return 0;
 }

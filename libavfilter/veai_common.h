@@ -21,6 +21,7 @@ int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
 void* ff_veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
                             int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx);
 void ff_veai_prepareIOBufferInput(IOBuffer* ioBuffer, AVFrame *in, FrameType frameType, int isFirst);
-AVFrame* ff_veai_prepareIOBufferOutput(AVFilterLink *outlink, IOBuffer* ioBuffer);
+AVFrame* ff_veai_prepareBufferOutput(AVFilterLink *outlink, VEAIBuffer* oBuffer);
+int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx);
 
 #endif

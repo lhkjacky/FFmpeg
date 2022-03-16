@@ -116,7 +116,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         return AVERROR(ENOSYS);
     }
     while(veai->position < veai->count) {
-        out = ff_veai_prepareIOBufferOutput(outlink, &ioBuffer);
+        out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
         location = veai->position - (veai->count - 1);
         av_log(NULL, AV_LOG_DEBUG, "Process frame %f on current %d at %f\n", veai->position, veai->count, location);
         if(veai->pFrameProcessor == NULL || out == NULL || veai_interpolator_process(veai->pFrameProcessor, location, &ioBuffer)) {
