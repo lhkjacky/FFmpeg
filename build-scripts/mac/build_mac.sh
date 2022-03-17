@@ -12,14 +12,14 @@ if [ -z "$2" -o -z "$3" -o -z "$4" ]; then
 	exit 1
 fi;
 
-FLAGS=(--enable-libvpx --enable-libopenh264 --disable-ffplay --enable-shared --as=clang --disable-x86asm --enable-neon)
+FLAGS=(--enable-libvpx --enable-libopenh264 --disable-ffplay --enable-shared --disable-static --disable-asm --enable-neon)
 XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64" --extra-ldflags="-arch x86_64" --disable-ffplay --enable-cross-compile --enable-shared --enable-libvpx --enable-libopenh264)
 if [[ "$1" -eq 1 ]]; then
 	bash ./build-scripts/mac/conan_mac.sh
 	CONAN_X64=./conan_x64
 	CONAN_ARM=./conan_arm
 	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai $5" --extra-ldflags="-L${CONAN_ARM}/lib $6" --enable-veai ${FLAGS[@]})
-	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib $6" --enable-shared --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay)
+	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay)
 fi
 
 # libopenh264's location must be manually specified in some situations
@@ -35,12 +35,18 @@ rm -rf $3
 rm -rf $4
 
 set -e
+shopt -s extglob
+
 #export PKG_CONFIG_PATH=$OPENH264_ARM_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
 make clean
 echo ./configure --prefix="$2" "${FLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_ARM_PKG_CONFIG_PATH":$PKG_CONFIG_PATH
 ./configure --prefix="$2" "${FLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_ARM_PKG_CONFIG_PATH":$PKG_CONFIG_PATH
 make clean
 make -j8 install
+if [ ! -z "$DO_CONAN_EXPORT" ]; then
+	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
+	cp -Rp "$2"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
+fi
 if [ ! -z "$CONAN_ARM" ]; then
 	cp "$CONAN_ARM/lib/"*".dylib" $2/lib/
 fi
@@ -54,6 +60,10 @@ echo ./configure --prefix="$3" "${XFLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_X
 ./configure --prefix="$3" "${XFLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_X86_PKG_CONFIG_PATH":$PKG_CONFIG_PATH
 make clean
 make -j8 install
+if [ ! -z "$DO_CONAN_EXPORT" ]; then
+	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac12.0/build_type\=Release/
+	cp -Rp "$3"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac12.0/build_type\=Release/
+fi
 if [ ! -z "$CONAN_X64" ]; then
 	cp "$CONAN_X64/lib/"*".dylib" $3/lib/
 fi
