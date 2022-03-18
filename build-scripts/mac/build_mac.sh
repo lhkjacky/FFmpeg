@@ -2,11 +2,6 @@
 
 #OLD_PKG_CONFIG_PATH=$PKG_CONFIG_PATH
 
-if [[ "$USE_DEFAULT_PKG_CONFIG" -ne 1 ]] && [ -z "$OPENH264_X86_PKG_CONFIG_PATH" -o -z "$OPENH264_ARM_PKG_CONFIG_PATH" ]; then
-	echo 'Please ensure $OPENH264_X86_PKG_CONFIG_PATH and $OPENH264_ARM_PKG_CONFIG_PATH are set, or run this script with USE_DEFAULT_PKG_CONFIG=1'
-	exit 1
-fi	
-
 if [ -z "$2" -o -z "$3" -o -z "$4" ]; then
 	echo "Usage: ./build_mac.sh [veai enabled? (0 or 1)] [arm output path] [x86 output path] [universal output path] (extra cflags) (extra ldflags) (path to arm openh264 binaries) (path to x86 openh264 binaries)"
 	exit 1
@@ -18,8 +13,8 @@ if [[ "$1" -eq 1 ]]; then
 	bash ./build-scripts/mac/conan_mac.sh
 	CONAN_X64=./conan_x64
 	CONAN_ARM=./conan_arm
-	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai $5" --extra-ldflags="-L${CONAN_ARM}/lib $6" --enable-veai ${FLAGS[@]})
-	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay)
+	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib $6" --enable-veai ${FLAGS[@]})
+	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay)
 fi
 
 # libopenh264's location must be manually specified in some situations
@@ -39,8 +34,8 @@ shopt -s extglob
 
 #export PKG_CONFIG_PATH=$OPENH264_ARM_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
 make clean
-echo ./configure --prefix="$2" "${FLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_ARM_PKG_CONFIG_PATH":$PKG_CONFIG_PATH
-./configure --prefix="$2" "${FLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_ARM_PKG_CONFIG_PATH":$PKG_CONFIG_PATH
+echo ./configure --prefix="$2" "${FLAGS[@]}"
+./configure --prefix="$2" "${FLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
@@ -56,8 +51,8 @@ fi
 
 #export PKG_CONFIG_PATH=$OPENH264_X86_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
 make clean
-echo ./configure --prefix="$3" "${XFLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_X86_PKG_CONFIG_PATH":$PKG_CONFIG_PATH
-./configure --prefix="$3" "${XFLAGS[@]}" --env=PKG_CONFIG_PATH="$OPENH264_X86_PKG_CONFIG_PATH":$PKG_CONFIG_PATH
+echo ./configure --prefix="$3" "${XFLAGS[@]}"
+./configure --prefix="$3" "${XFLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
