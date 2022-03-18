@@ -18,6 +18,9 @@
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
+
+#include "config_components.h"
+
 #include "avcodec.h"
 #include "encode.h"
 #include "get_bits.h"
@@ -1006,7 +1009,7 @@ static int sonic_decode_frame(AVCodecContext *avctx,
 
     // dequantize
     for (i = 0; i < s->num_taps; i++)
-        s->predictor_k[i] *= s->tap_quant[i];
+        s->predictor_k[i] *= (unsigned) s->tap_quant[i];
 
     if (s->lossless)
         quant = 1;

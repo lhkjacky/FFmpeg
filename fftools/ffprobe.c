@@ -29,7 +29,9 @@
 #include <string.h>
 
 #include "libavformat/avformat.h"
+#include "libavformat/version.h"
 #include "libavcodec/avcodec.h"
+#include "libavcodec/version.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/bprint.h"
@@ -51,9 +53,14 @@
 #include "libavutil/timecode.h"
 #include "libavutil/timestamp.h"
 #include "libavdevice/avdevice.h"
+#include "libavdevice/version.h"
 #include "libswscale/swscale.h"
+#include "libswscale/version.h"
 #include "libswresample/swresample.h"
+#include "libswresample/version.h"
 #include "libpostproc/postprocess.h"
+#include "libpostproc/version.h"
+#include "libavfilter/version.h"
 #include "cmdutils.h"
 
 #include "libavutil/thread.h"
