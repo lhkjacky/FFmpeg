@@ -42,14 +42,13 @@ typedef struct VEAICPEContext {
     int device, extraThreads;
     int canDownloadModels;
     void* pFrameProcessor;
-    int firstFrame;
     unsigned int counter;
 } VEAICPEContext;
 
 #define OFFSET(x) offsetof(VEAICPEContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 static const AVOption veai_cpe_options[] = {
-    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="cam-1"}, .flags = FLAGS },
+    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="cpe-1"}, .flags = FLAGS },
     { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
@@ -62,7 +61,6 @@ AVFILTER_DEFINE_CLASS(veai_cpe);
 static av_cold int init(AVFilterContext *ctx) {
   VEAICPEContext *veai = ctx->priv;
   av_log(ctx, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
-  veai->firstFrame = 1;
   veai->counter = 0;
   return 0;
 }
@@ -90,7 +88,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     VEAICPEContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     IOBuffer ioBuffer;
-    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
+    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->counter==0);
 
     float transform[4] = {0,0,0,0};
     ioBuffer.output.pBuffer = (unsigned char *)transform;
@@ -101,12 +99,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-
-    int ignoreValue = veai->firstFrame;
-    veai->firstFrame = 0;
-    if(ignoreValue)
-      return ff_filter_frame(outlink, in);
-    av_log(ctx, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
+    av_log(ctx, AV_LOG_DEBUG, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
     return ff_filter_frame(outlink, in);
 }
 
