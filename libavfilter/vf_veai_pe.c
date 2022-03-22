@@ -79,17 +79,27 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     IOBuffer ioBuffer;
+    int i;
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
 
     float parameters[VEAI_MAX_PARAMETER_COUNT] = {0};
     ioBuffer.output.pBuffer = (unsigned char *)parameters;
     ioBuffer.output.lineSize = sizeof(float)*VEAI_MAX_PARAMETER_COUNT;
-
     if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
+    av_frame_free(&in);
+    if(ioBuffer.output.timestamp < 0) {
+      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(ioBuffer.output.timestamp, outlink->time_base));
+      return 0;
+    }
+    av_log(ctx, AV_LOG_WARNING, "Parameter values:[");
+    for(i=0;i<VEAI_MAX_PARAMETER_COUNT;i++) {
+        av_log(ctx, AV_LOG_WARNING, " %f,", parameters[i]);
+    }
+    av_log(ctx, AV_LOG_WARNING, "]\n");
     veai->firstFrame = 0;
     return ff_filter_frame(outlink, in);
 }
