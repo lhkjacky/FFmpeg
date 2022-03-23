@@ -1,8 +1,8 @@
-#include "veai_common.h"
+#include "tvai_common.h"
 
-int ff_veai_checkDevice(int deviceIndex, AVFilterContext* ctx) {
+int ff_tvai_checkDevice(int deviceIndex, AVFilterContext* ctx) {
   char devices[1024];
-  int device_count = veai_device_list(devices, 1024);
+  int device_count = tvai_device_list(devices, 1024);
   if(deviceIndex < -2 || deviceIndex > device_count ) {
       av_log(ctx, AV_LOG_ERROR, "Invalid value %d for device, device should be in the following list:\n-2 : AUTO \n-1 : CPU\n%s\n%d : ALL GPUs\n", deviceIndex, devices, device_count);
       return AVERROR(EINVAL);
@@ -10,7 +10,7 @@ int ff_veai_checkDevice(int deviceIndex, AVFilterContext* ctx) {
   return 0;
 }
 
-int ff_veai_checkScale(int scale, AVFilterContext* ctx) {
+int ff_tvai_checkScale(int scale, AVFilterContext* ctx) {
   if(scale != 1 && scale != 2 && scale !=4 ) {
       av_log(ctx, AV_LOG_ERROR, "Invalid value %d for scale, only 1,2,4 allowed for scale\n", scale);
       return AVERROR(EINVAL);
@@ -18,16 +18,16 @@ int ff_veai_checkScale(int scale, AVFilterContext* ctx) {
   return 0;
 }
 
-void ff_veai_handleLogging() {
+void ff_tvai_handleLogging() {
   int logLevel = av_log_get_level();
   if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
-      veai_disable_logging();
+      tvai_disable_logging();
   }
 }
 
-int ff_veai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ctx) {
+int ff_tvai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ctx) {
   char modelString[10024];
-  int modelStringSize = veai_model_list(modelName, modelType, modelString, 10024);
+  int modelStringSize = tvai_model_list(modelName, modelType, modelString, 10024);
   if(modelStringSize > 0) {
       av_log(ctx, AV_LOG_ERROR, "Invalid value %s for model, model should be in the following list:\n%s\n", modelName, modelString);
       return AVERROR(EINVAL);
@@ -38,10 +38,10 @@ int ff_veai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ct
   return 0;
 }
 
-int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
+int ff_tvai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
                             int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
-  ff_veai_handleLogging();
-  if(ff_veai_checkModel(modelName, modelType, ctx) || ff_veai_checkDevice(deviceIndex, ctx) || ff_veai_checkScale(scale, ctx)) {
+  ff_tvai_handleLogging();
+  if(ff_tvai_checkModel(modelName, modelType, ctx) || ff_tvai_checkDevice(deviceIndex, ctx) || ff_tvai_checkScale(scale, ctx)) {
     return 1;
   }
   info->basic.processorName = processorName;
@@ -64,22 +64,22 @@ int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
   return 0;
 }
 
-void* ff_veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
+void* ff_tvai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
                             int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
   VideoProcessorInfo info;
-  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, processorName, modelName, modelType, deviceIndex, extraThreads, scale, canDownloadModels, pParameters, parameterCount, ctx))
+  if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, processorName, modelName, modelType, deviceIndex, extraThreads, scale, canDownloadModels, pParameters, parameterCount, ctx))
     return NULL;
-  return veai_create(&info);
+  return tvai_create(&info);
 }
 
-void ff_veai_prepareIOBufferInput(IOBuffer* ioBuffer, AVFrame *in, FrameType frameType, int isFirst) {
+void ff_tvai_prepareIOBufferInput(IOBuffer* ioBuffer, AVFrame *in, FrameType frameType, int isFirst) {
   ioBuffer->input.pBuffer = in->data[0];
   ioBuffer->input.lineSize = in->linesize[0];
   ioBuffer->input.timestamp = in->pts;
   ioBuffer->frameType = frameType | (isFirst ? FrameTypeStart : FrameTypeNone);
 }
 
-AVFrame* ff_veai_prepareBufferOutput(AVFilterLink *outlink, VEAIBuffer* oBuffer) {
+AVFrame* ff_tvai_prepareBufferOutput(AVFilterLink *outlink, TVAIBuffer* oBuffer) {
   AVFrame* out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
   if (!out) {
       av_log(NULL, AV_LOG_ERROR, "The processing has failed, unable to create output buffer of size:%dx%d\n", outlink->w, outlink->h);
@@ -90,12 +90,12 @@ AVFrame* ff_veai_prepareBufferOutput(AVFilterLink *outlink, VEAIBuffer* oBuffer)
   return out;
 }
 
-int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
-    int i, n = veai_remaining_frames(pProcessor);
+int ff_tvai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
+    int i, n = tvai_remaining_frames(pProcessor);
     for(i=0;i<n;i++) {
-        VEAIBuffer oBuffer;
-        AVFrame *out = ff_veai_prepareBufferOutput(outlink, &oBuffer);
-        if(pProcessor == NULL || out == NULL ||veai_process_last(pProcessor, &oBuffer)) {
+        TVAIBuffer oBuffer;
+        AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
+        if(pProcessor == NULL || out == NULL ||tvai_process_last(pProcessor, &oBuffer)) {
             av_log(ctx, AV_LOG_ERROR, "The processing has failed");
             av_frame_free(&in);
             return AVERROR(ENOSYS);

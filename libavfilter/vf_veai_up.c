@@ -33,10 +33,10 @@
 #include "formats.h"
 #include "internal.h"
 #include "video.h"
-#include "veai.h"
-#include "veai_common.h"
+#include "tvai.h"
+#include "tvai_common.h"
 
-typedef struct VEAIUpContext {
+typedef struct TVAIUpContext {
     const AVClass *class;
     char *model;
     int device, scale, extraThreads;
@@ -44,11 +44,11 @@ typedef struct VEAIUpContext {
     double preBlur, noise, details, halo, blur, compression;
     void* pFrameProcessor;
     AVFrame* previousFrame;
-} VEAIUpContext;
+} TVAIUpContext;
 
-#define OFFSET(x) offsetof(VEAIUpContext, x)
+#define OFFSET(x) offsetof(TVAIUpContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
-static const AVOption veai_up_options[] = {
+static const AVOption tvai_up_options[] = {
     { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="aaa-9"}, .flags = FLAGS },
     { "scale",  "Output scale",  OFFSET(scale),  AV_OPT_TYPE_INT, {.i64=1}, 0, 10, FLAGS, "scale" },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
@@ -63,24 +63,24 @@ static const AVOption veai_up_options[] = {
     { NULL }
 };
 
-AVFILTER_DEFINE_CLASS(veai_up);
+AVFILTER_DEFINE_CLASS(tvai_up);
 
 static av_cold int init(AVFilterContext *ctx) {
-  VEAIUpContext *veai = ctx->priv;
-  av_log(ctx, AV_LOG_VERBOSE, "Here init with params: %s %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device,
-        veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
-  veai->previousFrame = NULL;
+  TVAIUpContext *tvai = ctx->priv;
+  av_log(ctx, AV_LOG_VERBOSE, "Here init with params: %s %d %d %lf %lf %lf %lf %lf %lf\n", tvai->model, tvai->scale, tvai->device,
+        tvai->preBlur, tvai->noise, tvai->details, tvai->halo, tvai->blur, tvai->compression);
+  tvai->previousFrame = NULL;
   return 0;
 }
 
 static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
-    VEAIUpContext *veai = ctx->priv;
+    TVAIUpContext *tvai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
-    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads,
-                                                    veai->scale, veai->canDownloadModels, parameter_values, 6, ctx);
-    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
+    float parameter_values[6] = {tvai->preBlur, tvai->noise, tvai->details, tvai->halo, tvai->blur, tvai->compression};
+    tvai->pFrameProcessor = ff_tvai_verifyAndCreate(inlink, outlink, (char*)"up", tvai->model, ModelTypeUpscaling, tvai->device, tvai->extraThreads,
+                                                    tvai->scale, tvai->canDownloadModels, parameter_values, 6, ctx);
+    return tvai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -90,14 +90,14 @@ static const enum AVPixelFormat pix_fmts[] = {
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
-    VEAIUpContext *veai = ctx->priv;
+    TVAIUpContext *tvai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
     static int count = 0;
-    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->previousFrame == NULL);
-    out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
-    if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
+    ff_tvai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, tvai->previousFrame == NULL);
+    out = ff_tvai_prepareBufferOutput(outlink, &ioBuffer.output);
+    if(tvai->pFrameProcessor == NULL || out == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
@@ -105,42 +105,42 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     double its = TS2T(in->pts, inlink->time_base);
     av_frame_copy_props(out, in);
     out->pts = ioBuffer.output.timestamp;
-    if(veai->previousFrame)
-      av_frame_free(&veai->previousFrame);
-    veai->previousFrame = in;
+    if(tvai->previousFrame)
+      av_frame_free(&tvai->previousFrame);
+    tvai->previousFrame = in;
     if(ioBuffer.output.timestamp < 0) {
       av_frame_free(&out);
-      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %d %s %u %lf %lf\n", count, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
+      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %d %s %u %lf %lf\n", count, tvai->model, tvai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
       return 0;
     }
-    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %d %s %u %lf %lf\n", count++, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %d %s %u %lf %lf\n", count++, tvai->model, tvai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
     return ff_filter_frame(outlink, out);
 }
 
 static int request_frame(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
-    VEAIUpContext *veai = ctx->priv;
+    TVAIUpContext *tvai = ctx->priv;
     int ret = ff_request_frame(ctx->inputs[0]);
     if (ret == AVERROR_EOF) {
-        if(ff_veai_handlePostFlight(veai->pFrameProcessor, outlink, veai->previousFrame, ctx)) {
+        if(ff_tvai_handlePostFlight(tvai->pFrameProcessor, outlink, tvai->previousFrame, ctx)) {
           av_log(NULL, AV_LOG_ERROR, "The postflight processing has failed");
-          av_frame_free(&veai->previousFrame);
+          av_frame_free(&tvai->previousFrame);
           return AVERROR(ENOSYS);
         }
-        av_frame_free(&veai->previousFrame);
-        av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", veai->model, veai->pFrameProcessor == NULL);
+        av_frame_free(&tvai->previousFrame);
+        av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", tvai->model, tvai->pFrameProcessor == NULL);
     }
     return ret;
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
-    VEAIUpContext *veai = ctx->priv;
-    av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %d\n", veai->model, veai->pFrameProcessor == NULL);
-    if(veai->pFrameProcessor)
-        veai_destroy(veai->pFrameProcessor);
+    TVAIUpContext *tvai = ctx->priv;
+    av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %d\n", tvai->model, tvai->pFrameProcessor == NULL);
+    if(tvai->pFrameProcessor)
+        tvai_destroy(tvai->pFrameProcessor);
 }
 
-static const AVFilterPad veai_up_inputs[] = {
+static const AVFilterPad tvai_up_inputs[] = {
     {
         .name         = "default",
         .type         = AVMEDIA_TYPE_VIDEO,
@@ -148,7 +148,7 @@ static const AVFilterPad veai_up_inputs[] = {
     },
 };
 
-static const AVFilterPad veai_up_outputs[] = {
+static const AVFilterPad tvai_up_outputs[] = {
     {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
@@ -157,15 +157,15 @@ static const AVFilterPad veai_up_outputs[] = {
     },
 };
 
-const AVFilter ff_vf_veai_up = {
-    .name          = "veai_up",
+const AVFilter ff_vf_tvai_up = {
+    .name          = "tvai_up",
     .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI upscale models, parameters will only be applied to appropriate models"),
-    .priv_size     = sizeof(VEAIUpContext),
+    .priv_size     = sizeof(TVAIUpContext),
     .init          = init,
     .uninit        = uninit,
-    FILTER_INPUTS(veai_up_inputs),
-    FILTER_OUTPUTS(veai_up_outputs),
+    FILTER_INPUTS(tvai_up_inputs),
+    FILTER_OUTPUTS(tvai_up_outputs),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .priv_class    = &veai_up_class,
+    .priv_class    = &tvai_up_class,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
 };

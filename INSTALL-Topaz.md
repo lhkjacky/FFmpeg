@@ -3,11 +3,11 @@
 ### Mac
 You should install the dependencies mentioned [here](https://trac.ffmpeg.org/wiki/CompilationGuide/macOS#CompilingFFmpegyourself). We likely won't use all of them, but you'll get everything you need.
 
-1. If you wish to enable VEAI support, locate the veai.h file and the libveai.dylib and libaiengine.dylib files included with VEAI. Make a note of these two folders.
+1. If you wish to enable TVAI support, locate the tvai.h file and the libtvai.dylib and libaiengine.dylib files included with TVAI. Make a note of these two folders.
 
 2. Execute the following command:
 ```
-./configure --prefix=/path/to/install/to --enable-shared --enable-veai --extra-cflags="-I/path/to/folder/with/veai.h" --extra-ldflags="-L/path/to/folder/with/libveai.dylib"
+./configure --prefix=/path/to/install/to --enable-shared --enable-tvai --extra-cflags="-I/path/to/folder/with/tvai.h" --extra-ldflags="-L/path/to/folder/with/libtvai.dylib"
 ```
 
 If there are additional features you want enabled, make sure you add the corresponding option(s) to the above command.
@@ -23,13 +23,13 @@ FFmpeg will be installed to /path/to/install/to.
 ```
 otool -L /path/to/executable
 -OUTPUT SNIPPED-
-libveai.0.dylib ...
+libtvai.0.dylib ...
 -OUTPUT SNIPPED-
 
-install_name_tool -change libveai.0.dylib /path/to/real/libveai.0.dylib /path/to/executable
+install_name_tool -change libtvai.0.dylib /path/to/real/libtvai.0.dylib /path/to/executable
 ```
 
-You may need to repeat step 4 for multiple dependencies and files. If you're unable to find a dependency, check inside VEAI's .app file.
+You may need to repeat step 4 for multiple dependencies and files. If you're unable to find a dependency, check inside TVAI's .app file.
 
 ### Windows
 
@@ -63,23 +63,23 @@ You may also find it helpful to have the following:
 
 8. Ensure that libmfx.lib is in `${DEPENDENCIES_DIR}/msdk-lib`. If it is not present, build the Intel Media SDK Dispatcher manually.
 
-9. If you wish to enable VEAI support you will need to find the veai.h, aiengine.lib, and veai.lib files provided with VEAI. Make a note of what folders these are in.
+9. If you wish to enable TVAI support you will need to find the tvai.h, aiengine.lib, and tvai.lib files provided with TVAI. Make a note of what folders these are in.
 
 10. Determine which features you will enable. We use all of the following:
   - `--enable-nvenc` CUDA encoders
   - `--enable-nvdec` CUDA decoders
   - `--enable-amf` AMD Advanced Meda Framework
   - `--enable-libmfx` Intel Media SDK
-  - `--enable-veai` Enable our VEAI filters
+  - `--enable-tvai` Enable our TVAI filters
   - `--enable-zlib` zlib, required for some encoders/decoders
   - `--disable-vulkan` Disables Vulkan support. *At the time of writing, this is required*
 
 11. In the root of this repository, run the configure command with your options. We use the following command to enable all our desired features:
 ```
 ./configure --toolchain=msvc --prefix=/path/to/install/to --enable-shared --enable-nvenc --enable-nvdec --disable-vulkan \
- --enable-amf --enable-libmfx --enable-zlib --enable-veai \ 
- --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include -I/path/to/folder/with/veai.h" \
- --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary -libpath:/path/to/folder/with/veai.lib" \
+ --enable-amf --enable-libmfx --enable-zlib --enable-tvai \ 
+ --extra-cflags="-I${DEPENDENCIES_DIR}/nv_sdk -I${DEPENDENCIES_DIR}/include -I/mingw64/include -I/path/to/folder/with/tvai.h" \
+ --extra-ldflags="-libpath:${DEPENDENCIES_DIR}/nv_sdk -libpath:${DEPENDENCIES_DIR}/msdk-lib -libpath:${DEPENDENCIES_DIR}/zlib-binary -libpath:/path/to/folder/with/tvai.lib" \
 ```
 
 If you wish to enable another feature, or disable a specific feature, make sure to add the corresponding option to the command
@@ -90,4 +90,4 @@ make -r -j8
 make -r install
 ```
 
-13. ffmpeg is now installed to `/path/to/install/to`. You will likely need to copy the dll files from your VEAI install into the `/path/to/install/to/bin` folder to run the program.
+13. ffmpeg is now installed to `/path/to/install/to`. You will likely need to copy the dll files from your TVAI install into the `/path/to/install/to/bin` folder to run the program.
