@@ -31,15 +31,12 @@
 #include "libavutil/pixdesc.h"
 #include "libavutil/avassert.h"
 
+#include "codec_internal.h"
 #include "internal.h"
 #include "encode.h"
 #include "packet_internal.h"
 #include "avcodec.h"
 #include "profiles.h"
-
-#ifndef SVT_AV1_CHECK_VERSION
-#define SVT_AV1_CHECK_VERSION(major, minor, patch) 0
-#endif
 
 typedef enum eos_status {
     EOS_NOT_REACHED = 0,
@@ -65,17 +62,19 @@ typedef struct SvtContext {
 
     // User options.
     AVDictionary *svtav1_opts;
+#if FF_API_SVTAV1_OPTS
     int hierarchical_level;
     int la_depth;
-    int enc_mode;
-    int crf;
     int scd;
-    int qp;
 
     int tier;
 
     int tile_columns;
     int tile_rows;
+#endif
+    int enc_mode;
+    int crf;
+    int qp;
 } SvtContext;
 
 static const struct {
@@ -159,12 +158,19 @@ static int config_enc_params(EbSvtAv1EncConfiguration *param,
     AVDictionaryEntry *en = NULL;
 
     // Update param from options
+#if FF_API_SVTAV1_OPTS
     param->hierarchical_levels      = svt_enc->hierarchical_level;
+    param->tier                     = svt_enc->tier;
+    param->scene_change_detection   = svt_enc->scd;
+    param->tile_columns             = svt_enc->tile_columns;
+    param->tile_rows                = svt_enc->tile_rows;
+
+    if (svt_enc->la_depth >= 0)
+        param->look_ahead_distance  = svt_enc->la_depth;
+#endif
 
     if (svt_enc->enc_mode >= 0)
         param->enc_mode             = svt_enc->enc_mode;
-
-    param->tier                     = svt_enc->tier;
 
     if (avctx->bit_rate) {
         param->target_bit_rate      = avctx->bit_rate;
@@ -179,19 +185,11 @@ static int config_enc_params(EbSvtAv1EncConfiguration *param,
     if (svt_enc->crf > 0) {
         param->qp                   = svt_enc->crf;
         param->rate_control_mode    = 0;
-        param->enable_tpl_la        = 1;
     } else if (svt_enc->qp > 0) {
         param->qp                   = svt_enc->qp;
         param->rate_control_mode    = 0;
-        param->enable_tpl_la        = 0;
+        param->enable_adaptive_quantization = 0;
     }
-    param->scene_change_detection   = svt_enc->scd;
-
-    if (svt_enc->la_depth >= 0)
-        param->look_ahead_distance  = svt_enc->la_depth;
-
-    param->tile_columns = svt_enc->tile_columns;
-    param->tile_rows    = svt_enc->tile_rows;
 
 #if SVT_AV1_CHECK_VERSION(0, 9, 1)
     while ((en = av_dict_get(svt_enc->svtav1_opts, "", en, AV_DICT_IGNORE_SUFFIX))) {
@@ -229,6 +227,16 @@ static int config_enc_params(EbSvtAv1EncConfiguration *param,
         av_log(avctx, AV_LOG_ERROR , "Unsupported pixel format\n");
         return AVERROR(EINVAL);
     }
+
+    param->color_primaries          = avctx->color_primaries;
+    param->matrix_coefficients      = (desc->flags & AV_PIX_FMT_FLAG_RGB) ?
+                                      AVCOL_SPC_RGB : avctx->colorspace;
+    param->transfer_characteristics = avctx->color_trc;
+
+    if (avctx->color_range != AVCOL_RANGE_UNSPECIFIED)
+        param->color_range = avctx->color_range == AVCOL_RANGE_JPEG;
+    else
+        param->color_range = !!(desc->flags & AV_PIX_FMT_FLAG_RGB);
 
     if (avctx->profile != FF_PROFILE_UNKNOWN)
         param->profile = avctx->profile;
@@ -519,21 +527,22 @@ static av_cold int eb_enc_close(AVCodecContext *avctx)
 #define OFFSET(x) offsetof(SvtContext, x)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
-    { "hielevel", "Hierarchical prediction levels setting", OFFSET(hierarchical_level),
-      AV_OPT_TYPE_INT, { .i64 = 4 }, 3, 4, VE , "hielevel"},
+#if FF_API_SVTAV1_OPTS
+    { "hielevel", "Hierarchical prediction levels setting (Deprecated, use svtav1-params)", OFFSET(hierarchical_level),
+      AV_OPT_TYPE_INT, { .i64 = 4 }, 3, 4, VE | AV_OPT_FLAG_DEPRECATED , "hielevel"},
         { "3level", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 3 },  INT_MIN, INT_MAX, VE, "hielevel" },
         { "4level", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 4 },  INT_MIN, INT_MAX, VE, "hielevel" },
 
-    { "la_depth", "Look ahead distance [0, 120]", OFFSET(la_depth),
-      AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 120, VE },
+    { "la_depth", "Look ahead distance [0, 120] (Deprecated, use svtav1-params)", OFFSET(la_depth),
+      AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 120, VE | AV_OPT_FLAG_DEPRECATED },
 
-    { "preset", "Encoding preset",
-      OFFSET(enc_mode), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, MAX_ENC_PRESET, VE },
-
-    { "tier", "Set operating point tier", OFFSET(tier),
-      AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VE, "tier" },
+    { "tier", "Set operating point tier (Deprecated, use svtav1-params)", OFFSET(tier),
+      AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VE | AV_OPT_FLAG_DEPRECATED, "tier" },
         { "main", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, 0, 0, VE, "tier" },
         { "high", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 1 }, 0, 0, VE, "tier" },
+#endif
+    { "preset", "Encoding preset",
+      OFFSET(enc_mode), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, MAX_ENC_PRESET, VE },
 
     FF_AV1_PROFILE_OPTS
 
@@ -569,12 +578,13 @@ static const AVOption options[] = {
       AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 63, VE },
     { "qp", "Initial Quantizer level value", OFFSET(qp),
       AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 63, VE },
+#if FF_API_SVTAV1_OPTS
+    { "sc_detection", "Scene change detection (Deprecated, use svtav1-params)", OFFSET(scd),
+      AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE | AV_OPT_FLAG_DEPRECATED },
 
-    { "sc_detection", "Scene change detection", OFFSET(scd),
-      AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE },
-
-    { "tile_columns", "Log2 of number of tile columns to use", OFFSET(tile_columns), AV_OPT_TYPE_INT, {.i64 = 0}, 0, 4, VE},
-    { "tile_rows", "Log2 of number of tile rows to use", OFFSET(tile_rows), AV_OPT_TYPE_INT, {.i64 = 0}, 0, 6, VE},
+    { "tile_columns", "Log2 of number of tile columns to use (Deprecated, use svtav1-params)", OFFSET(tile_columns), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 4, VE | AV_OPT_FLAG_DEPRECATED },
+    { "tile_rows", "Log2 of number of tile rows to use (Deprecated, use svtav1-params)", OFFSET(tile_rows), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 6, VE | AV_OPT_FLAG_DEPRECATED },
+#endif
 
     { "svtav1-params", "Set the SVT-AV1 configuration using a :-separated list of key=value parameters", OFFSET(svtav1_opts), AV_OPT_TYPE_DICT, { 0 }, 0, 0, VE },
 
@@ -588,7 +598,7 @@ static const AVClass class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-static const AVCodecDefault eb_enc_defaults[] = {
+static const FFCodecDefault eb_enc_defaults[] = {
     { "b",         "0"    },
     { "flags",     "+cgop" },
     { "g",         "-1"    },
@@ -597,21 +607,21 @@ static const AVCodecDefault eb_enc_defaults[] = {
     { NULL },
 };
 
-const AVCodec ff_libsvtav1_encoder = {
-    .name           = "libsvtav1",
-    .long_name      = NULL_IF_CONFIG_SMALL("SVT-AV1(Scalable Video Technology for AV1) encoder"),
+const FFCodec ff_libsvtav1_encoder = {
+    .p.name         = "libsvtav1",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("SVT-AV1(Scalable Video Technology for AV1) encoder"),
     .priv_data_size = sizeof(SvtContext),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_AV1,
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_AV1,
     .init           = eb_enc_init,
     .receive_packet = eb_receive_packet,
     .close          = eb_enc_close,
-    .capabilities   = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS,
+    .p.capabilities = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS,
     .caps_internal  = FF_CODEC_CAP_AUTO_THREADS | FF_CODEC_CAP_INIT_CLEANUP,
-    .pix_fmts       = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUV420P,
+    .p.pix_fmts     = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUV420P,
                                                     AV_PIX_FMT_YUV420P10,
                                                     AV_PIX_FMT_NONE },
-    .priv_class     = &class,
+    .p.priv_class   = &class,
     .defaults       = eb_enc_defaults,
-    .wrapper_name   = "libsvtav1",
+    .p.wrapper_name = "libsvtav1",
 };

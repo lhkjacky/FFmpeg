@@ -29,7 +29,9 @@
 #include <string.h>
 
 #include "libavformat/avformat.h"
+#include "libavformat/version.h"
 #include "libavcodec/avcodec.h"
+#include "libavcodec/version.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/bprint.h"
@@ -51,10 +53,16 @@
 #include "libavutil/timecode.h"
 #include "libavutil/timestamp.h"
 #include "libavdevice/avdevice.h"
+#include "libavdevice/version.h"
 #include "libswscale/swscale.h"
+#include "libswscale/version.h"
 #include "libswresample/swresample.h"
+#include "libswresample/version.h"
 #include "libpostproc/postprocess.h"
+#include "libpostproc/version.h"
+#include "libavfilter/version.h"
 #include "cmdutils.h"
+#include "opt_common.h"
 
 #include "libavutil/thread.h"
 
@@ -2531,12 +2539,10 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
         if (s) print_str    ("sample_fmt", s);
         else   print_str_opt("sample_fmt", "unknown");
         print_int("nb_samples",         frame->nb_samples);
-        print_int("channels", frame->channels);
-        if (frame->channel_layout) {
-            av_bprint_clear(&pbuf);
-            av_bprint_channel_layout(&pbuf, frame->channels,
-                                     frame->channel_layout);
-            print_str    ("channel_layout", pbuf.str);
+        print_int("channels", frame->ch_layout.nb_channels);
+        if (frame->ch_layout.order != AV_CHANNEL_ORDER_UNSPEC) {
+            av_channel_layout_describe(&frame->ch_layout, val_str, sizeof(val_str));
+            print_str    ("channel_layout", val_str);
         } else
             print_str_opt("channel_layout", "unknown");
         break;
@@ -2948,12 +2954,11 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         if (s) print_str    ("sample_fmt", s);
         else   print_str_opt("sample_fmt", "unknown");
         print_val("sample_rate",     par->sample_rate, unit_hertz_str);
-        print_int("channels",        par->channels);
+        print_int("channels",        par->ch_layout.nb_channels);
 
-        if (par->channel_layout) {
-            av_bprint_clear(&pbuf);
-            av_bprint_channel_layout(&pbuf, par->channels, par->channel_layout);
-            print_str    ("channel_layout", pbuf.str);
+        if (par->ch_layout.order != AV_CHANNEL_ORDER_UNSPEC) {
+            av_channel_layout_describe(&par->ch_layout, val_str, sizeof(val_str));
+            print_str    ("channel_layout", val_str);
         } else {
             print_str_opt("channel_layout", "unknown");
         }
@@ -3617,22 +3622,6 @@ static int opt_show_entries(void *optctx, const char *opt, const char *arg)
     return ret;
 }
 
-static int opt_show_format_entry(void *optctx, const char *opt, const char *arg)
-{
-    char *buf = av_asprintf("format=%s", arg);
-    int ret;
-
-    if (!buf)
-        return AVERROR(ENOMEM);
-
-    av_log(NULL, AV_LOG_WARNING,
-           "Option '%s' is deprecated, use '-show_entries format=%s' instead\n",
-           opt, arg);
-    ret = opt_show_entries(optctx, opt, buf);
-    av_free(buf);
-    return ret;
-}
-
 static void opt_input_file(void *optctx, const char *arg)
 {
     if (input_filename) {
@@ -3893,8 +3882,6 @@ static const OptionDef real_options[] = {
     { "show_error",   0, { .func_arg = &opt_show_error },  "show probing error" },
     { "show_format",  0, { .func_arg = &opt_show_format }, "show format/container info" },
     { "show_frames",  0, { .func_arg = &opt_show_frames }, "show frames info" },
-    { "show_format_entry", HAS_ARG, {.func_arg = opt_show_format_entry},
-      "show a particular entry from the format/container info", "entry" },
     { "show_entries", HAS_ARG, {.func_arg = opt_show_entries},
       "show a set of specified entries", "entry_list" },
 #if HAVE_THREADS
@@ -3915,7 +3902,6 @@ static const OptionDef real_options[] = {
     { "private",           OPT_BOOL, { &show_private_data }, "same as show_private_data" },
     { "bitexact", OPT_BOOL, {&do_bitexact}, "force bitexact output" },
     { "read_intervals", HAS_ARG, {.func_arg = opt_read_intervals}, "set read intervals", "read_intervals" },
-    { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, {.func_arg = opt_default}, "generic catch all option", "" },
     { "i", HAS_ARG, {.func_arg = opt_input_file_i}, "read specified file", "input_file"},
     { "print_filename", HAS_ARG, {.func_arg = opt_print_filename}, "override the printed input filename", "print_file"},
     { "find_stream_info", OPT_BOOL | OPT_INPUT | OPT_EXPERT, { &find_stream_info },

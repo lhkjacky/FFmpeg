@@ -4,6 +4,7 @@ DESC = FFmpeg container format library
 HEADERS = avformat.h                                                    \
           avio.h                                                        \
           version.h                                                     \
+          version_major.h                                               \
 
 OBJS = allformats.o         \
        avio.o               \
@@ -166,6 +167,8 @@ OBJS-$(CONFIG_DAUD_MUXER)                += daudenc.o
 OBJS-$(CONFIG_DCSTR_DEMUXER)             += dcstr.o
 OBJS-$(CONFIG_DERF_DEMUXER)              += derf.o pcm.o
 OBJS-$(CONFIG_DFA_DEMUXER)               += dfa.o
+OBJS-$(CONFIG_DFPWM_DEMUXER)             += dfpwmdec.o pcm.o
+OBJS-$(CONFIG_DFPWM_MUXER)               += rawenc.o
 OBJS-$(CONFIG_DHAV_DEMUXER)              += dhav.o
 OBJS-$(CONFIG_DIRAC_DEMUXER)             += diracdec.o rawdec.o
 OBJS-$(CONFIG_DIRAC_MUXER)               += rawenc.o
@@ -708,6 +711,7 @@ SKIPHEADERS-$(CONFIG_NETWORK)            += network.h rtsp.h
 
 TESTPROGS = seek                                                        \
             url                                                         \
+            seek_utils
 #           async                                                       \
 
 FIFO-MUXER-TESTPROGS-$(CONFIG_NETWORK)   += fifo_muxer

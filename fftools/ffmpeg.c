@@ -64,6 +64,7 @@
 #include "libavutil/thread.h"
 #include "libavutil/threadmessage.h"
 #include "libavcodec/mathops.h"
+#include "libavcodec/version.h"
 #include "libavformat/os_support.h"
 
 # include "libavfilter/avfilter.h"
@@ -551,6 +552,7 @@ static void ffmpeg_cleanup(int ret)
 
             avfilter_inout_free(&ofilter->out_tmp);
             av_freep(&ofilter->name);
+            av_channel_layout_uninit(&ofilter->ch_layout);
             av_freep(&fg->outputs[j]);
         }
         av_freep(&fg->outputs);
@@ -845,10 +847,11 @@ static void write_packet(OutputFile *of, AVPacket *pkt, OutputStream *ost, int u
 
     if (debug_ts) {
         av_log(NULL, AV_LOG_INFO, "muxer <- type:%s "
-                "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s size:%d\n",
+                "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s duration:%s duration_time:%s size:%d\n",
                 av_get_media_type_string(ost->enc_ctx->codec_type),
                 av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, &ost->st->time_base),
                 av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &ost->st->time_base),
+                av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, &ost->st->time_base),
                 pkt->size
               );
     }
@@ -1036,9 +1039,11 @@ static void do_audio_out(OutputFile *of, OutputStream *ost,
 
         if (debug_ts) {
             av_log(NULL, AV_LOG_INFO, "encoder -> type:audio "
-                   "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s\n",
+                   "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s "
+                   "duration:%s duration_time:%s\n",
                    av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, &enc->time_base),
-                   av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &enc->time_base));
+                   av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &enc->time_base),
+                   av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, &enc->time_base));
         }
 
         output_packet(of, pkt, ost, 0);
@@ -1360,9 +1365,11 @@ static void do_video_out(OutputFile *of,
 
             if (debug_ts) {
                 av_log(NULL, AV_LOG_INFO, "encoder -> type:video "
-                       "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s\n",
+                       "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s "
+                       "duration:%s duration_time:%s\n",
                        av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, &enc->time_base),
-                       av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &enc->time_base));
+                       av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &enc->time_base),
+                       av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, &enc->time_base));
             }
 
             if (pkt->pts == AV_NOPTS_VALUE && !(enc->codec->capabilities & AV_CODEC_CAP_DELAY))
@@ -1372,9 +1379,11 @@ static void do_video_out(OutputFile *of,
 
             if (debug_ts) {
                 av_log(NULL, AV_LOG_INFO, "encoder -> type:video "
-                    "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s\n",
+                    "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s "
+                    "duration:%s duration_time:%s\n",
                     av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, &ost->mux_timebase),
-                    av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &ost->mux_timebase));
+                    av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &ost->mux_timebase),
+                    av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, &ost->mux_timebase));
             }
 
             frame_size = pkt->size;
@@ -1532,7 +1541,7 @@ static int reap_filters(int flush)
                 break;
             case AVMEDIA_TYPE_AUDIO:
                 if (!(enc->codec->capabilities & AV_CODEC_CAP_PARAM_CHANGE) &&
-                    enc->channels != filtered_frame->channels) {
+                    enc->ch_layout.nb_channels != filtered_frame->ch_layout.nb_channels) {
                     av_log(NULL, AV_LOG_ERROR,
                            "Audio filter graph output is not normalized and encoder does not support parameter changes\n");
                     break;
@@ -1606,7 +1615,7 @@ static void print_final_stats(int64_t total_size)
             total_packets += ist->nb_packets;
 
             av_log(NULL, AV_LOG_VERBOSE, "  Input stream #%d:%d (%s): ",
-                   i, j, media_type_string(type));
+                   i, j, av_get_media_type_string(type));
             av_log(NULL, AV_LOG_VERBOSE, "%"PRIu64" packets read (%"PRIu64" bytes); ",
                    ist->nb_packets, ist->data_size);
 
@@ -1640,7 +1649,7 @@ static void print_final_stats(int64_t total_size)
             total_packets += ost->packets_written;
 
             av_log(NULL, AV_LOG_VERBOSE, "  Output stream #%d:%d (%s): ",
-                   i, j, media_type_string(type));
+                   i, j, av_get_media_type_string(type));
             if (ost->encoding_needed) {
                 av_log(NULL, AV_LOG_VERBOSE, "%"PRIu64" frames encoded",
                        ost->frames_encoded);
@@ -1878,17 +1887,22 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         print_final_stats(total_size);
 }
 
-static void ifilter_parameters_from_codecpar(InputFilter *ifilter, AVCodecParameters *par)
+static int ifilter_parameters_from_codecpar(InputFilter *ifilter, AVCodecParameters *par)
 {
+    int ret;
+
     // We never got any input. Set a fake format, which will
     // come from libavformat.
     ifilter->format                 = par->format;
     ifilter->sample_rate            = par->sample_rate;
-    ifilter->channels               = par->channels;
-    ifilter->channel_layout         = par->channel_layout;
     ifilter->width                  = par->width;
     ifilter->height                 = par->height;
     ifilter->sample_aspect_ratio    = par->sample_aspect_ratio;
+    ret = av_channel_layout_copy(&ifilter->ch_layout, &par->ch_layout);
+    if (ret < 0)
+        return ret;
+
+    return 0;
 }
 
 static void flush_encoders(void)
@@ -1916,8 +1930,11 @@ static void flush_encoders(void)
                 int x;
                 for (x = 0; x < fg->nb_inputs; x++) {
                     InputFilter *ifilter = fg->inputs[x];
-                    if (ifilter->format < 0)
-                        ifilter_parameters_from_codecpar(ifilter, ifilter->ist->st->codecpar);
+                    if (ifilter->format < 0 &&
+                        ifilter_parameters_from_codecpar(ifilter, ifilter->ist->st->codecpar) < 0) {
+                        av_log(NULL, AV_LOG_ERROR, "Error copying paramerets from input stream\n");
+                        exit_program(1);
+                    }
                 }
 
                 if (!ifilter_has_all_input_formats(fg))
@@ -2093,16 +2110,15 @@ int guess_input_channel_layout(InputStream *ist)
 {
     AVCodecContext *dec = ist->dec_ctx;
 
-    if (!dec->channel_layout) {
+    if (dec->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC) {
         char layout_name[256];
 
-        if (dec->channels > ist->guess_layout_max)
+        if (dec->ch_layout.nb_channels > ist->guess_layout_max)
             return 0;
-        dec->channel_layout = av_get_default_channel_layout(dec->channels);
-        if (!dec->channel_layout)
+        av_channel_layout_default(&dec->ch_layout, dec->ch_layout.nb_channels);
+        if (dec->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC)
             return 0;
-        av_get_channel_layout_string(layout_name, sizeof(layout_name),
-                                     dec->channels, dec->channel_layout);
+        av_channel_layout_describe(&dec->ch_layout, layout_name, sizeof(layout_name));
         av_log(NULL, AV_LOG_WARNING, "Guessed Channel Layout for Input Stream "
                "#%d.%d : %s\n", ist->file_index, ist->st->index, layout_name);
     }
@@ -2155,8 +2171,7 @@ static int ifilter_send_frame(InputFilter *ifilter, AVFrame *frame, int keep_ref
     switch (ifilter->ist->st->codecpar->codec_type) {
     case AVMEDIA_TYPE_AUDIO:
         need_reinit |= ifilter->sample_rate    != frame->sample_rate ||
-                       ifilter->channels       != frame->channels ||
-                       ifilter->channel_layout != frame->channel_layout;
+                       av_channel_layout_compare(&ifilter->ch_layout, &frame->ch_layout);
         break;
     case AVMEDIA_TYPE_VIDEO:
         need_reinit |= ifilter->width  != frame->width ||
@@ -2232,8 +2247,11 @@ static int ifilter_send_eof(InputFilter *ifilter, int64_t pts)
             return ret;
     } else {
         // the filtergraph was never configured
-        if (ifilter->format < 0)
-            ifilter_parameters_from_codecpar(ifilter, ifilter->ist->st->codecpar);
+        if (ifilter->format < 0) {
+            ret = ifilter_parameters_from_codecpar(ifilter, ifilter->ist->st->codecpar);
+            if (ret < 0)
+                return ret;
+        }
         if (ifilter->format < 0 && (ifilter->type == AVMEDIA_TYPE_AUDIO || ifilter->type == AVMEDIA_TYPE_VIDEO)) {
             av_log(NULL, AV_LOG_ERROR, "Cannot determine format of input stream %d:%d after EOF\n", ifilter->ist->file_index, ifilter->ist->st->index);
             return AVERROR_INVALIDDATA;
@@ -2870,9 +2888,9 @@ static int init_input_stream(int ist_index, char *error, int error_len)
         ist->dec_ctx->opaque                = ist;
         ist->dec_ctx->get_format            = get_format;
 #if LIBAVCODEC_VERSION_MAJOR < 60
-FF_DISABLE_DEPRECATION_WARNINGS
+        AV_NOWARN_DEPRECATED({
         ist->dec_ctx->thread_safe_callbacks = 1;
-FF_ENABLE_DEPRECATION_WARNINGS
+        })
 #endif
 
         if (ist->dec_ctx->codec_id == AV_CODEC_ID_DVB_SUBTITLE &&
@@ -3306,8 +3324,9 @@ static int init_output_stream_encode(OutputStream *ost, AVFrame *frame)
     case AVMEDIA_TYPE_AUDIO:
         enc_ctx->sample_fmt     = av_buffersink_get_format(ost->filter->filter);
         enc_ctx->sample_rate    = av_buffersink_get_sample_rate(ost->filter->filter);
-        enc_ctx->channel_layout = av_buffersink_get_channel_layout(ost->filter->filter);
-        enc_ctx->channels       = av_buffersink_get_channels(ost->filter->filter);
+        ret = av_buffersink_get_ch_layout(ost->filter->filter, &enc_ctx->ch_layout);
+        if (ret < 0)
+            return ret;
 
         if (ost->bits_per_raw_sample)
             enc_ctx->bits_per_raw_sample = ost->bits_per_raw_sample;
@@ -4304,12 +4323,13 @@ static int process_input(int file_index)
 
     if (debug_ts) {
         av_log(NULL, AV_LOG_INFO, "demuxer -> ist_index:%d type:%s "
-               "next_dts:%s next_dts_time:%s next_pts:%s next_pts_time:%s pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s off:%s off_time:%s\n",
+               "next_dts:%s next_dts_time:%s next_pts:%s next_pts_time:%s pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s duration:%s duration_time:%s off:%s off_time:%s\n",
                ifile->ist_index + pkt->stream_index, av_get_media_type_string(ist->dec_ctx->codec_type),
                av_ts2str(ist->next_dts), av_ts2timestr(ist->next_dts, &AV_TIME_BASE_Q),
                av_ts2str(ist->next_pts), av_ts2timestr(ist->next_pts, &AV_TIME_BASE_Q),
                av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, &ist->st->time_base),
                av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &ist->st->time_base),
+               av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, &ist->st->time_base),
                av_ts2str(input_files[ist->file_index]->ts_offset),
                av_ts2timestr(input_files[ist->file_index]->ts_offset, &AV_TIME_BASE_Q));
     }
@@ -4460,10 +4480,11 @@ static int process_input(int file_index)
         ifile->last_ts = av_rescale_q(pkt->dts, ist->st->time_base, AV_TIME_BASE_Q);
 
     if (debug_ts) {
-        av_log(NULL, AV_LOG_INFO, "demuxer+ffmpeg -> ist_index:%d type:%s pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s off:%s off_time:%s\n",
+        av_log(NULL, AV_LOG_INFO, "demuxer+ffmpeg -> ist_index:%d type:%s pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s duration:%s duration_time:%s off:%s off_time:%s\n",
                ifile->ist_index + pkt->stream_index, av_get_media_type_string(ist->dec_ctx->codec_type),
                av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, &ist->st->time_base),
                av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, &ist->st->time_base),
+               av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, &ist->st->time_base),
                av_ts2str(input_files[ist->file_index]->ts_offset),
                av_ts2timestr(input_files[ist->file_index]->ts_offset, &AV_TIME_BASE_Q));
     }

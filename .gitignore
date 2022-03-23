@@ -35,10 +35,9 @@
 /ffprobe
 /config.asm
 /config.h
+/config_components.h
 /coverage.info
 /lcov/
 /src
 /mapfile
 /tools/python/__pycache__/
-/output/
-.DS_Store
