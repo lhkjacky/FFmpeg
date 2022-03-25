@@ -36,7 +36,7 @@ typedef struct VEAIParamContext {
     char *model;
     int device;
     int canDownloadModels;
-    void* pFrameProcessor;
+    void* pParamEstimator;
     int firstFrame;
 } VEAIParamContext;
 
@@ -55,7 +55,7 @@ static av_cold int init(AVFilterContext *ctx) {
   VEAIParamContext *veai = ctx->priv;
   av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
   veai->firstFrame = 1;
-  return veai->pFrameProcessor == NULL;
+  return veai->pParamEstimator == NULL;
 }
 
 static int config_props(AVFilterLink *outlink) {
@@ -63,8 +63,8 @@ static int config_props(AVFilterLink *outlink) {
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
 
-    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
-    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
+    veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
+    return veai->pParamEstimator == NULL ? AVERROR(EINVAL) : 0;
     return 0;
 }
 
@@ -78,9 +78,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    int i;
     float parameters[VEAI_MAX_PARAMETER_COUNT] = {0};
-    int result = ff_veai_estimateParam(ctx, veai->pFrameProcessor, in, veai->firstFrame, parameters);
+    int result = ff_veai_estimateParam(ctx, veai->pParamEstimator, in, veai->firstFrame, parameters);
     if(!(result == 0 || result == 1)) {
         return result;
     }
@@ -90,7 +89,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAIParamContext *veai = ctx->priv;
-    veai_destroy(veai->pFrameProcessor);
+    veai_destroy(veai->pParamEstimator);
 }
 
 static const AVFilterPad veai_pe_inputs[] = {
