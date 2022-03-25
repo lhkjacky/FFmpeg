@@ -5,7 +5,7 @@ class conanRecipe(ConanFile):
 	settings = ("os", "build_type", "arch")
 
 	def requirements(self):
-		self.requires("videoai/0.4.1")
+		self.requires("videoai/0.4.2")
 		if self.settings.os == "Macos":
 		    self.requires("openh264/2.2.0")
 
