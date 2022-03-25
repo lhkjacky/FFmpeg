@@ -90,16 +90,15 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    av_frame_free(&in);
     if(ioBuffer.output.timestamp < 0) {
-      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(ioBuffer.output.timestamp, outlink->time_base));
-      return 0;
+        av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(ioBuffer.output.timestamp, outlink->time_base));
+    } else {
+        av_log(ctx, AV_LOG_WARNING, "Parameter values:[");
+        for(i=0;i<VEAI_MAX_PARAMETER_COUNT;i++) {
+            av_log(ctx, AV_LOG_WARNING, " %f,", parameters[i]);
+        }
+        av_log(ctx, AV_LOG_WARNING, "]\n");
     }
-    av_log(ctx, AV_LOG_WARNING, "Parameter values:[");
-    for(i=0;i<VEAI_MAX_PARAMETER_COUNT;i++) {
-        av_log(ctx, AV_LOG_WARNING, " %f,", parameters[i]);
-    }
-    av_log(ctx, AV_LOG_WARNING, "]\n");
     veai->firstFrame = 0;
     return ff_filter_frame(outlink, in);
 }

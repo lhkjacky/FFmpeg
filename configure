@@ -324,6 +324,7 @@ External library support:
   --disable-securetransport disable Secure Transport, needed for TLS support
                            on OSX if openssl and gnutls are not used [autodetect]
   --enable-vapoursynth     enable VapourSynth demuxer [no]
+  --enable-veai            enable Topaz Video Enhance AI [no]
   --disable-vulkan         disable Vulkan code [autodetect]
   --disable-xlib           disable xlib [autodetect]
   --disable-zlib           disable zlib [autodetect]
@@ -1881,6 +1882,7 @@ EXTERNAL_LIBRARY_LIST="
     openssl
     pocketsphinx
     vapoursynth
+    veai
 "
 
 HWACCEL_AUTODETECT_LIBRARY_LIST="
