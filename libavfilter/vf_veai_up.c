@@ -106,7 +106,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
         int result = ff_veai_estimateParam(ctx, veai->pParamEstimator, in, !veai->estimating, parameters);
         if(result == 0) {
             if(veai_parameter_update(veai->pFrameProcessor, parameters) != 0) {
-              av_log(NULL, AV_LOG_ERROR, "Updating parameters has failed");
+              av_log(NULL, AV_LOG_ERROR, "Updating parameters has failed\n");
               av_frame_free(&in);
               return AVERROR(ENOSYS);
             }
@@ -120,7 +120,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->previousFrame == NULL);
     out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
     if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed");
+        av_log(NULL, AV_LOG_ERROR, "The processing has failed\n");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
@@ -161,6 +161,9 @@ static av_cold void uninit(AVFilterContext *ctx) {
     av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %d\n", veai->model, veai->pFrameProcessor == NULL);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
+    if(veai->pParamEstimator)
+        veai_destroy(veai->pParamEstimator);
+
 }
 
 static const AVFilterPad veai_up_inputs[] = {
