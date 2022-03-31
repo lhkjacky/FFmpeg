@@ -41,7 +41,7 @@ typedef struct VEAIUpContext {
     char *model;
     int device, scale, extraThreads;
     int canDownloadModels;
-    int estimateParamNthFrame, count, estimating;
+    int estimateFrameCount, count, estimating;
     double preBlur, noise, details, halo, blur, compression;
     void* pFrameProcessor;
     void* pParamEstimator;
@@ -56,13 +56,13 @@ static const AVOption veai_up_options[] = {
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
-    { "estimate",  "Auto estimate parameter every Nth frame, 0 to disable auto parameter estimation",  OFFSET(estimateParamNthFrame),  AV_OPT_TYPE_INT, {.i64=0}, 0, 1000000, FLAGS, "estimateParamNthFrame" },
+    { "estimate",  "Number of frames for auto parameter estimation, 0 to disable auto parameter estimation",  OFFSET(estimateFrameCount),  AV_OPT_TYPE_INT, {.i64=0}, 0, 1000000, FLAGS, "estimateParamNthFrame" },
     { "preblur",  "Adjusts both the antialiasing and deblurring strength relative to the amount of aliasing and blurring in the input video. \nNegative values are better if the input video has aliasing artifacts such as moire patterns or staircasing. Positive values are better if the input video has more lens blurring than aliasing artifacts. ",  OFFSET(preBlur),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "preblur" },
-    { "noise",  "Removes ISO noise from the input video. Higher values remove more noise but may also remove fine details. \nNote that this value is relative to the amount of noise found in the input video - higher values on videos with low amounts of ISO noise may introduce more artifacts.",  OFFSET(noise),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 1.0, FLAGS, "noise" },
-    { "details",  "Used to recover fine texture and detail lost due to in-camera noise suppression. \nThis value is relative to the amount of noise suppression in the camera used for the input video, and higher values may introduce artifacts if the input video has little to no in-camera noise suppression.",  OFFSET(details),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 1.0, FLAGS, "details" },
-    { "halo",  "Increase this if the input video has halo or ring artifacts around strong edges caused by oversharpening. \nThis value is relative to the amount of haloing artifacts in the input video, and has a \"sweet spot\". Values that are too high for the input video may cause additional artifacts to appear.",  OFFSET(halo),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 1.0, FLAGS, "halo" },
-    { "blur",  "Additional sharpening of the video. Use this if the input video looks too soft. \nThe value set should be relative to the amount of softness in the input video - if the input video is already sharp, higher values will introduce more artifacts.",  OFFSET(blur),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 1.0, FLAGS, "blur" },
-    { "compression",  "Reduces compression artifacts from codec encoding, such as blockiness or mosquito noise. Higher values are best for low bitrate videos.\nNote that the value should be relative to the amount of compression artifacts in the input video - higher values on a video with few compression artifacts will introduce more artifacts into the output.",  OFFSET(compression),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0, 1.0, FLAGS, "compression" },
+    { "noise",  "Removes ISO noise from the input video. Higher values remove more noise but may also remove fine details. \nNote that this value is relative to the amount of noise found in the input video - higher values on videos with low amounts of ISO noise may introduce more artifacts.",  OFFSET(noise),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "noise" },
+    { "details",  "Used to recover fine texture and detail lost due to in-camera noise suppression. \nThis value is relative to the amount of noise suppression in the camera used for the input video, and higher values may introduce artifacts if the input video has little to no in-camera noise suppression.",  OFFSET(details),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "details" },
+    { "halo",  "Increase this if the input video has halo or ring artifacts around strong edges caused by oversharpening. \nThis value is relative to the amount of haloing artifacts in the input video, and has a \"sweet spot\". Values that are too high for the input video may cause additional artifacts to appear.",  OFFSET(halo),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "halo" },
+    { "blur",  "Additional sharpening of the video. Use this if the input video looks too soft. \nThe value set should be relative to the amount of softness in the input video - if the input video is already sharp, higher values will introduce more artifacts.",  OFFSET(blur),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "blur" },
+    { "compression",  "Reduces compression artifacts from codec encoding, such as blockiness or mosquito noise. Higher values are best for low bitrate videos.\nNote that the value should be relative to the amount of compression artifacts in the input video - higher values on a video with few compression artifacts will introduce more artifacts into the output.",  OFFSET(compression),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "compression" },
     { NULL }
 };
 
@@ -73,7 +73,6 @@ static av_cold int init(AVFilterContext *ctx) {
   av_log(ctx, AV_LOG_VERBOSE, "Here init with params: %s %d %d %lf %lf %lf %lf %lf %lf\n", veai->model, veai->scale, veai->device,
         veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression);
   veai->previousFrame = NULL;
-  veai->estimating = 0;
   veai->count = 0;
   return 0;
 }
@@ -83,12 +82,14 @@ static int config_props(AVFilterLink *outlink) {
     VEAIUpContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
-    if(veai->estimateParamNthFrame > 0) {
-      veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", "prap-3", ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
+    VideoProcessorInfo info;
+    info.frameCount = veai->estimateFrameCount;
+    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (veai->estimateFrameCount > 0) ? (char*)"ad" : (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads,
+                                                    veai->scale, veai->canDownloadModels, parameter_values, 6, ctx)) {
+      return AVERROR(EINVAL);
     }
-    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads,
-                                                    veai->scale, veai->canDownloadModels, parameter_values, 6, ctx);
-    return (veai->pFrameProcessor == NULL || (veai->estimateParamNthFrame > 0 && veai->pParamEstimator == NULL)) ? AVERROR(EINVAL) : 0;
+    veai->pFrameProcessor = veai_create(&info);
+    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -102,22 +103,6 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    if(veai->estimateParamNthFrame > 0 && (veai->count%veai->estimateParamNthFrame == 0 || veai->estimating)) {
-        float parameters[VEAI_MAX_PARAMETER_COUNT] = {0};
-        int result = ff_veai_estimateParam(ctx, veai->pParamEstimator, in, !veai->estimating, parameters);
-        if(result == 0) {
-            if(veai_parameter_update(veai->pFrameProcessor, parameters) != 0) {
-              av_log(NULL, AV_LOG_ERROR, "Updating parameters has failed\n");
-              av_frame_free(&in);
-              return AVERROR(ENOSYS);
-            }
-            veai->estimating = 0;
-        } else if(result != 1) {
-            return result;
-        } else {
-            veai->estimating = 1;
-        }
-    }
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->previousFrame == NULL);
     out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
     if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
@@ -131,13 +116,12 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     if(veai->previousFrame)
       av_frame_free(&veai->previousFrame);
     veai->previousFrame = in;
-    veai->count++;
     if(ioBuffer.output.timestamp < 0) {
       av_frame_free(&out);
-      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %d %s %u %lf %lf\n", veai->count, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
+      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %u %lf %lf\n", veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
       return 0;
     }
-    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %d %s %u %lf %lf\n", veai->count, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %s %u %lf %lf\n", veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
     return ff_filter_frame(outlink, out);
 }
 
