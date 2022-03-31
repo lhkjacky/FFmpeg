@@ -83,11 +83,12 @@ static int config_props(AVFilterLink *outlink) {
     VEAIUpContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
-
+    if(veai->estimateParamNthFrame > 0) {
+      veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", "prap-3", ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
+    }
     veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads,
                                                     veai->scale, veai->canDownloadModels, parameter_values, 6, ctx);
-    veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", "prap-3", ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
-    return (veai->pFrameProcessor == NULL || veai->pParamEstimator == NULL) ? AVERROR(EINVAL) : 0;
+    return (veai->pFrameProcessor == NULL || (veai->estimateParamNthFrame > 0 && veai->pParamEstimator == NULL)) ? AVERROR(EINVAL) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -136,7 +137,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
       av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %d %s %u %lf %lf\n", veai->count, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
       return 0;
     }
-    av_log(ctx, AV_LOG_WARNING, "Finished processing frame %d %s %u %lf %lf\n", veai->count, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %d %s %u %lf %lf\n", veai->count, veai->model, veai->scale, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
     return ff_filter_frame(outlink, out);
 }
 

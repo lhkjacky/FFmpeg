@@ -59,6 +59,7 @@ int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
   }
   outlink->w = inlink->w*scale;
   outlink->h = inlink->h*scale;
+  av_log(ctx, AV_LOG_DEBUG, "Output size set to: %d %d\n", outlink->w, outlink->h);
   av_log(ctx, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info->basic.processorName, info->basic.modelName, info->basic.scale, info->basic.deviceIndex,
           info->basic.extraThreadCount, info->basic.canDownloadModel, info->basic.inputWidth, info->basic.inputHeight, info->basic.timebase, info->basic.framerate);
   return 0;
