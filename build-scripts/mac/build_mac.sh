@@ -7,14 +7,14 @@ if [ -z "$2" -o -z "$3" -o -z "$4" ]; then
 	exit 1
 fi;
 
-FLAGS=(--enable-libvpx --enable-libopenh264 --disable-ffplay --enable-shared --disable-static --disable-asm --enable-neon)
-XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64" --extra-ldflags="-arch x86_64" --disable-ffplay --enable-cross-compile --enable-shared --enable-libvpx --enable-libopenh264)
+FLAGS=(--enable-libvpx --enable-libopenh264 --disable-ffplay --enable-shared --disable-static --disable-asm --enable-neon --extra-cflags="-I./conan_arm/include" --extra-ldflags="-L./conan_arm/lib")
+XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I./conan_x64/include" --extra-ldflags="-arch x86_64 -L./conan_x64/lib" --disable-ffplay --enable-cross-compile --enable-shared --enable-libvpx --enable-libopenh264)
 if [[ "$1" -eq 1 ]]; then
 	bash ./build-scripts/mac/conan_mac.sh
 	CONAN_X64=./conan_x64
 	CONAN_ARM=./conan_arm
-	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib $6" --enable-veai ${FLAGS[@]})
-	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay)
+	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib -headerpad_max_install_names $6" --enable-veai ${FLAGS[@]})
+	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay)
 fi
 
 # libopenh264's location must be manually specified in some situations
@@ -56,8 +56,8 @@ echo ./configure --prefix="$3" "${XFLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
-	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac12.0/build_type\=Release/
-	cp -Rp "$3"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac12.0/build_type\=Release/
+	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
+	cp -Rp "$3"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
 fi
 if [ ! -z "$CONAN_X64" ]; then
 	cp "$CONAN_X64/lib/"*".dylib" $3/lib/
@@ -125,10 +125,12 @@ mkdir -p ${UNIVERSAL_DIR}/MacOS
 for exe in "$2/bin/ff"*; do
 	lipo -create $exe $3/bin/`basename $exe` -output ${UNIVERSAL_DIR}/MacOS/`basename $exe`
 	python3 ./build-scripts/mac/fixDeps.py ${UNIVERSAL_DIR}/MacOS/`basename $exe`
+	codesign -f -s 'Developer ID Application: Topaz Labs, LLC (3G3JE37ZHF)' ${UNIVERSAL_DIR}/MacOS/`basename $exe`
 done
 for lib in ${UNIVERSAL_DIR}/Frameworks/*.dylib; do
 	python3 ./build-scripts/mac/fixDeps.py $lib
+	codesign -f -s 'Developer ID Application: Topaz Labs, LLC (3G3JE37ZHF)' $lib
 done
 
-bash build-scripts/mac/copy_qt_framework.sh $HOME/Qt/6.2.2/macos ${UNIVERSAL_DIR}
+bash build-scripts/mac/copy_qt_framework.sh $HOME/Qt/6.2.4/macos ${UNIVERSAL_DIR}
 bash build-scripts/mac/package_bundle.sh ${UNIVERSAL_DIR} build-dmg "Topaz Video Enhance AI 3"
