@@ -59,6 +59,7 @@ int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
   }
   outlink->w = inlink->w*scale;
   outlink->h = inlink->h*scale;
+  av_log(ctx, AV_LOG_DEBUG, "Output size set to: %d %d\n", outlink->w, outlink->h);
   av_log(ctx, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info->basic.processorName, info->basic.modelName, info->basic.scale, info->basic.deviceIndex,
           info->basic.extraThreadCount, info->basic.canDownloadModel, info->basic.inputWidth, info->basic.inputHeight, info->basic.timebase, info->basic.framerate);
   return 0;
@@ -113,5 +114,27 @@ int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *i
           return code;
         }
     }
+    return 0;
+}
+
+int ff_veai_estimateParam(AVFilterContext* ctx, void* pProcessor, AVFrame* in, int isFirstFrame, float *parameters) {
+    IOBuffer ioBuffer;
+    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, isFirstFrame);
+    ioBuffer.output.pBuffer = (unsigned char *)parameters;
+    ioBuffer.output.lineSize = sizeof(float)*VEAI_MAX_PARAMETER_COUNT;
+    if(pProcessor == NULL || veai_process(pProcessor,  &ioBuffer)) {
+        av_log(NULL, AV_LOG_ERROR, "The processing has failed");
+        av_frame_free(&in);
+        return AVERROR(ENOSYS);
+    }
+    if(ioBuffer.output.timestamp < 0) {
+        av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lld\n", ioBuffer.output.timestamp);
+        return 1;
+    }
+    av_log(ctx, AV_LOG_WARNING, "Parameter values:[");
+    for(int i=0;i<VEAI_MAX_PARAMETER_COUNT;i++) {
+        av_log(ctx, AV_LOG_WARNING, " %f,", parameters[i]);
+    }
+    av_log(ctx, AV_LOG_WARNING, "]\n");
     return 0;
 }

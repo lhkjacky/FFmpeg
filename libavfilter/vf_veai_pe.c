@@ -36,7 +36,7 @@ typedef struct VEAIParamContext {
     char *model;
     int device;
     int canDownloadModels;
-    void* pFrameProcessor;
+    void* pParamEstimator;
     int firstFrame;
 } VEAIParamContext;
 
@@ -55,7 +55,7 @@ static av_cold int init(AVFilterContext *ctx) {
   VEAIParamContext *veai = ctx->priv;
   av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
   veai->firstFrame = 1;
-  return veai->pFrameProcessor == NULL;
+  return veai->pParamEstimator == NULL;
 }
 
 static int config_props(AVFilterLink *outlink) {
@@ -63,8 +63,8 @@ static int config_props(AVFilterLink *outlink) {
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
 
-    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
-    return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
+    veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
+    return veai->pParamEstimator == NULL ? AVERROR(EINVAL) : 0;
     return 0;
 }
 
@@ -78,26 +78,10 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    IOBuffer ioBuffer;
-    int i;
-    ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->firstFrame);
-
     float parameters[VEAI_MAX_PARAMETER_COUNT] = {0};
-    ioBuffer.output.pBuffer = (unsigned char *)parameters;
-    ioBuffer.output.lineSize = sizeof(float)*VEAI_MAX_PARAMETER_COUNT;
-    if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed");
-        av_frame_free(&in);
-        return AVERROR(ENOSYS);
-    }
-    if(ioBuffer.output.timestamp < 0) {
-        av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(ioBuffer.output.timestamp, outlink->time_base));
-    } else {
-        av_log(ctx, AV_LOG_WARNING, "Parameter values:[");
-        for(i=0;i<VEAI_MAX_PARAMETER_COUNT;i++) {
-            av_log(ctx, AV_LOG_WARNING, " %f,", parameters[i]);
-        }
-        av_log(ctx, AV_LOG_WARNING, "]\n");
+    int result = ff_veai_estimateParam(ctx, veai->pParamEstimator, in, veai->firstFrame, parameters);
+    if(!(result == 0 || result == 1)) {
+        return result;
     }
     veai->firstFrame = 0;
     return ff_filter_frame(outlink, in);
@@ -105,7 +89,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAIParamContext *veai = ctx->priv;
-    veai_destroy(veai->pFrameProcessor);
+    veai_destroy(veai->pParamEstimator);
 }
 
 static const AVFilterPad veai_pe_inputs[] = {
