@@ -7,14 +7,14 @@ if [ -z "$2" -o -z "$3" -o -z "$4" ]; then
 	exit 1
 fi;
 
-FLAGS=(--enable-libvpx --enable-libopenh264 --disable-ffplay --enable-shared --disable-static --disable-asm --enable-neon --extra-cflags="-I./conan_arm/include" --extra-ldflags="-L./conan_arm/lib")
-XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I./conan_x64/include" --extra-ldflags="-arch x86_64 -L./conan_x64/lib" --disable-ffplay --enable-cross-compile --enable-shared --enable-libvpx --enable-libopenh264)
+FLAGS=(--enable-libvpx --enable-libopenh264 --disable-ffplay --enable-shared --disable-static --disable-asm --enable-neon --disable-libxcb --extra-cflags="-I./conan_arm/include" --extra-ldflags="-L./conan_arm/lib")
+XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I./conan_x64/include" --extra-ldflags="-arch x86_64 -L./conan_x64/lib" --disable-ffplay --enable-cross-compile --enable-shared --enable-libvpx --enable-libopenh264 --disable-libxcb)
 if [[ "$1" -eq 1 ]]; then
 	bash ./build-scripts/mac/conan_mac.sh
 	CONAN_X64=./conan_x64
 	CONAN_ARM=./conan_arm
 	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib -headerpad_max_install_names $6" --enable-veai ${FLAGS[@]})
-	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay)
+	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay --disable-libxcb)
 fi
 
 # libopenh264's location must be manually specified in some situations
