@@ -15,8 +15,5 @@ steps:
         cd build-scripts/mac/
         bash ./build_and_publish.sh $(VERSION) _ _ $(Build.SourcesDirectory)/topaz-conan-dev 1
       fi
-
-      
-      bash ./mac_azure_build_and_publish.sh "$(VERSION)" "$(Build.SourcesDirectory)/topaz-conan-dev" "$(Build.BinariesDirectory)/Qt" ${PUBLISH}
     displayName: Build
       

@@ -35,7 +35,6 @@ shopt -s extglob
 #export PKG_CONFIG_PATH=$OPENH264_ARM_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
 export OLD_TARGET=${MACOSX_DEPLOYMENT_TARGET}
 export MACOSX_DEPLOYMENT_TARGET=11.0
-make clean
 echo ./configure --prefix="$2" "${FLAGS[@]}"
 CFLAGS="-mmacosx-version-min=11.0" LDFLAGS="-mmacosx-version-min=11.0" ./configure --prefix="$2" "${FLAGS[@]}"
 make clean
@@ -53,7 +52,6 @@ fi
 
 #export PKG_CONFIG_PATH=$OPENH264_X86_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
 export MACOSX_DEPLOYMENT_TARGET=10.14
-make clean
 echo ./configure --prefix="$3" "${XFLAGS[@]}"
 CFLAGS="-mmacosx-version-min=10.14" LDFLAGS="-mmacosx-version-min=10.14" ./configure --prefix="$3" "${XFLAGS[@]}"
 make clean
