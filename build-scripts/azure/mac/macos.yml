@@ -10,10 +10,10 @@ steps:
   - bash: |
       cd "$(Build.SourcesDirectory)/FFmpeg"
       if [[ "${BUILD_REASON}" == "PullRequest" ]]; then
-        bash ./build_scripts/mac/build_mac.sh 1 ./builds-arm ./builds-x86 ./builds-univ '' ''
+        arch -arm64 bash ./build_scripts/mac/build_mac.sh 1 ./builds-arm ./builds-x86 ./builds-univ '' ''
       else
         cd build-scripts/mac/
-        bash ./build_and_publish.sh $(VERSION) _ _ $(Build.SourcesDirectory)/topaz-conan-dev 1
+        arch -arm64 bash ./build_and_publish.sh $(VERSION) _ _ $(Build.SourcesDirectory)/topaz-conan-dev 1
       fi
     displayName: Build
       
