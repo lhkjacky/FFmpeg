@@ -1,17 +1,6 @@
 steps:
   - checkout: self
   - checkout: topaz-conan-dev
-
-  # We're not signing just yet
-  #- task: DownloadSecureFile@1
-  #  name: topazCert
-  #  inputs:
-  #    secureFile: topazlabs.certificate.p12
-  #  displayName: 'Download signing certificate'
-      
-  #- bash: |
-  #    echo "##vso[task.setvariable variable=TOPAZ_CERTPATH;isreadonly=true]$(topazCert.secureFilePath)"
-  #  displayName: 'Set certificate path'
     
   - template: ../set_tools_and_deps.yml
     parameters:
