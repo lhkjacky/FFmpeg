@@ -33,14 +33,16 @@ set -e
 shopt -s extglob
 
 #export PKG_CONFIG_PATH=$OPENH264_ARM_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
+export OLD_TARGET=${MACOSX_DEPLOYMENT_TARGET}
+export MACOSX_DEPLOYMENT_TARGET=11.0
 make clean
 echo ./configure --prefix="$2" "${FLAGS[@]}"
-./configure --prefix="$2" "${FLAGS[@]}"
+CFLAGS="-mmacosx-version-min=11.0" LDFLAGS="-mmacosx-version-min=11.0" ./configure --prefix="$2" "${FLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
-	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
-	cp -Rp "$2"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
+	mkdir -p ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
+	cp -Rp "$2"/* ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
 fi
 if [ ! -z "$CONAN_ARM" ]; then
 	cp "$CONAN_ARM/lib/"*".dylib" $2/lib/
@@ -50,14 +52,15 @@ if [ ! -z "$OPENH264_ARM" ]; then
 fi
 
 #export PKG_CONFIG_PATH=$OPENH264_X86_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
+export MACOSX_DEPLOYMENT_TARGET=10.14
 make clean
 echo ./configure --prefix="$3" "${XFLAGS[@]}"
-./configure --prefix="$3" "${XFLAGS[@]}"
+CFLAGS="-mmacosx-version-min=10.14" LDFLAGS="-mmacosx-version-min=10.14" ./configure --prefix="$3" "${XFLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
-	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
-	cp -Rp "$3"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
+	mkdir -p ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
+	cp -Rp "$3"/* ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
 fi
 if [ ! -z "$CONAN_X64" ]; then
 	cp "$CONAN_X64/lib/"*".dylib" $3/lib/
@@ -77,8 +80,10 @@ echo `pwd`
 
 shopt -s nullglob
 python3 ./build-scripts/mac/copy_deps.py $2/bin/deps "$2/bin/ff"*
-echo cp "$2/bin/deps/"*".dylib" $2/lib
-cp "$2/bin/deps/"*".dylib" $2/lib
+if [ ! -z "$2/bin/deps/"*".dylib" ]; then
+	echo cp "$2/bin/deps/"*".dylib" $2/lib
+	cp "$2/bin/deps/"*".dylib" $2/lib
+fi
 rm -rf $2/bin/deps
 
 mkdir -p $2/lib/deps
@@ -92,8 +97,10 @@ rm -rf $2/lib/deps
 
 mkdir -p $3/bin/deps
 python3 ./build-scripts/mac/copy_deps.py $3/bin/deps "$3/bin/ff"*
-echo cp "$3/bin/deps/"*".dylib" $3/lib
-cp "$3/bin/deps/"*".dylib" $3/lib
+if [ ! -z "$3/bin/deps/"*".dylib" ]; then
+	echo cp "$3/bin/deps/"*".dylib" $3/lib
+	cp "$3/bin/deps/"*".dylib" $3/lib
+fi
 rm -rf $3/bin/deps
 
 mkdir -p $3/lib/deps
@@ -134,3 +141,5 @@ done
 
 bash build-scripts/mac/copy_qt_framework.sh $HOME/Qt/6.2.4/macos ${UNIVERSAL_DIR}
 bash build-scripts/mac/package_bundle.sh ${UNIVERSAL_DIR} build-dmg "Topaz Video Enhance AI 3"
+
+export MACOSX_DEPLOYMENT_TARGET=${OLD_TARGET}
