@@ -9,7 +9,7 @@ steps:
 
   - bash: |
       cd "$(Build.SourcesDirectory)/FFmpeg"
-      if [[ "${BUILD_REASON}" == "PullRequest" ]]; then
+      if [[ "${BUILD_REASON}" == "PullRequest" || -z "${PUBLISH}" ]]; then
         arch -arm64 bash ./build_scripts/mac/build_mac.sh 1 ./builds-arm ./builds-x86 ./builds-univ '' ''
       else
         cd build-scripts/mac/
