@@ -98,7 +98,7 @@ int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *i
     for(i=0;i<n;i++) {
         VEAIBuffer oBuffer;
         AVFrame *out = ff_veai_prepareBufferOutput(outlink, &oBuffer);
-        if(pProcessor == NULL || out == NULL ||veai_process_last(pProcessor, &oBuffer)) {
+        if(pProcessor == NULL || out == NULL ||veai_process_back(pProcessor, &oBuffer)) {
             av_log(ctx, AV_LOG_ERROR, "The processing has failed");
             av_frame_free(&in);
             return AVERROR(ENOSYS);
