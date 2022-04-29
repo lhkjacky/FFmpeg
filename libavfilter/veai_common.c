@@ -94,7 +94,7 @@ AVFrame* ff_veai_prepareBufferOutput(AVFilterLink *outlink, VEAIBuffer* oBuffer)
 }
 
 int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
-    int i, n = veai_remaining_frames(pProcessor);
+    int i, n = veai_queued_frames(pProcessor);
     for(i=0;i<n;i++) {
         VEAIBuffer oBuffer;
         AVFrame *out = ff_veai_prepareBufferOutput(outlink, &oBuffer);
