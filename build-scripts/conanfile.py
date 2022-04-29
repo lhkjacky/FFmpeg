@@ -29,3 +29,4 @@ class conanRecipe(ConanFile):
         if self.settings.os == "Macos":
             self.copy("*", "include", "include")
             self.copy("*", "lib", "lib")
+            self.copy("nasm", "bin", "bin")

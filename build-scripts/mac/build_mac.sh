@@ -13,6 +13,7 @@ if [[ "$1" -eq 1 ]]; then
 	bash ./build-scripts/mac/conan_mac.sh
 	CONAN_X64=./conan_x64
 	CONAN_ARM=./conan_arm
+	export PATH=${CONAN_X64}/bin:${CONAN_ARM}/bin:$PATH
 	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib -headerpad_max_install_names $6" --enable-veai ${FLAGS[@]})
 	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay --disable-libxcb --disable-sdl2 --disable-xlib)
 fi
