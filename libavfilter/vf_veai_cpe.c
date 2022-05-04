@@ -129,8 +129,6 @@ static int request_frame(AVFilterLink *outlink) {
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAICPEContext *veai = ctx->priv;
-    float transform[4] = {0,0,0,0};
-    av_log(ctx, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
     av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
