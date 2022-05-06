@@ -94,6 +94,7 @@ AVFrame* ff_veai_prepareBufferOutput(AVFilterLink *outlink, VEAIBuffer* oBuffer)
 }
 
 int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
+    veai_end_stream(pProcessor);
     int i, n = veai_queued_frames(pProcessor);
     for(i=0;i<n;i++) {
         VEAIBuffer oBuffer;
@@ -108,7 +109,8 @@ int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *i
         if(oBuffer.timestamp < 0) {
           av_frame_free(&out);
           av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
-          return AVERROR(ENOSYS);
+          //return AVERROR(ENOSYS);
+          continue;
         }
         av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
         int code = ff_filter_frame(outlink, out);
