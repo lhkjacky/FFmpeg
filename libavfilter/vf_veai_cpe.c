@@ -43,6 +43,7 @@ typedef struct VEAICPEContext {
     int canDownloadModels;
     void* pFrameProcessor;
     unsigned int counter;
+    int rsc;
 } VEAICPEContext;
 
 #define OFFSET(x) offsetof(VEAICPEContext, x)
@@ -53,6 +54,7 @@ static const AVOption veai_cpe_options[] = {
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
+
     { NULL }
 };
 
@@ -71,7 +73,7 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterLink *inlink = ctx->inputs[0];
     VideoProcessorInfo info;
     info.options[0] = veai->filename;
-    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, NULL, 0, ctx)) {
+    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, &veai->rsc, 1, ctx)) {
       return AVERROR(EINVAL);
     }
     veai->pFrameProcessor = veai_create(&info);
@@ -114,7 +116,7 @@ static int request_frame(AVFilterLink *outlink) {
             float transform[4] = {0,0,0,0};
             oBuffer.pBuffer = (unsigned char *)transform;
             oBuffer.lineSize = sizeof(float)*4;
-            if(veai->pFrameProcessor == NULL || veai_process_last(veai->pFrameProcessor, &oBuffer)) {
+            if(veai->pFrameProcessor == NULL || veai_process_back(veai->pFrameProcessor, &oBuffer)) {
                 av_log(ctx, AV_LOG_ERROR, "The post flight processing has failed");
                 return AVERROR(ENOSYS);
             }
@@ -127,8 +129,6 @@ static int request_frame(AVFilterLink *outlink) {
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAICPEContext *veai = ctx->priv;
-    float transform[4] = {0,0,0,0};
-    av_log(ctx, AV_LOG_ERROR, "%u CPE: %f\t%f\t%f\t%f\n", veai->counter++, transform[0], transform[1], transform[2], transform[3]);
     av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
