@@ -39,7 +39,7 @@
 typedef struct VEAICPEContext {
     const AVClass *class;
     char *model, *filename;
-    int device, extraThreads;
+    int device;
     int canDownloadModels;
     void* pFrameProcessor;
     unsigned int counter;
@@ -52,9 +52,7 @@ static const AVOption veai_cpe_options[] = {
     { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="cpe-1"}, .flags = FLAGS },
     { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
-    { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
-
     { NULL }
 };
 
@@ -73,7 +71,7 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterLink *inlink = ctx->inputs[0];
     VideoProcessorInfo info;
     info.options[0] = veai->filename;
-    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, &veai->rsc, 1, ctx)) {
+    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, 0, 1, 1, veai->canDownloadModels, &veai->rsc, 1, ctx)) {
       return AVERROR(EINVAL);
     }
     veai->pFrameProcessor = veai_create(&info);
@@ -129,7 +127,7 @@ static int request_frame(AVFilterLink *outlink) {
 
 static av_cold void uninit(AVFilterContext *ctx) {
     VEAICPEContext *veai = ctx->priv;
-    av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %u\n", veai->model, veai->pFrameProcessor);
+    av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s\n", veai->model);
     if(veai->pFrameProcessor)
         veai_destroy(veai->pFrameProcessor);
 }

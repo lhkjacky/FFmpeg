@@ -63,7 +63,7 @@ static int config_props(AVFilterLink *outlink) {
     VEAIParamContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
 
-    veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeParameterEstimation, veai->device, 0, 1, veai->canDownloadModels, NULL, 0, ctx);
+    veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeParameterEstimation, veai->device, 0, 1, 1, veai->canDownloadModels, NULL, 0, ctx);
     return veai->pParamEstimator == NULL ? AVERROR(EINVAL) : 0;
     return 0;
 }
