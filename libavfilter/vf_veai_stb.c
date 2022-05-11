@@ -41,8 +41,11 @@ typedef struct VEAIStbContext {
     char *model, *filename, *filler;
     int device, extraThreads;
     int canDownloadModels;
+    double vram;
     void* pFrameProcessor;
     double smoothness;
+    int startTimecode, postFlight, windowSize;
+    double canvasScaleX, canvasScaleY;
     AVFrame* previousFrame;
 } VEAIStbContext;
 
@@ -53,8 +56,13 @@ static const AVOption veai_stb_options[] = {
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
-    { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS },
-    { "filler", "Filler output path", OFFSET(filler), AV_OPT_TYPE_STRING, {.str="./"}, .flags = FLAGS },
+    { "vram", "Max memory usage", OFFSET(vram), AV_OPT_TYPE_DOUBLE, {.dbl=1.0}, 0.1, 1, .flags = FLAGS, "vram"},
+    { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS, "filename"},
+    { "stc", "Start timecode for output", OFFSET(startTimecode), AV_OPT_TYPE_INT, {.i64=0}, .flags = FLAGS, "stc" },
+    { "postFlight", "Enable postflight", OFFSET(postFlight), AV_OPT_TYPE_INT, {.i64=1}, .flags = FLAGS, "postFlight"  },
+    { "windowSize", "Window size of stabilization estimation", OFFSET(windowSize), AV_OPT_TYPE_INT, {.i64=64}, .flags = FLAGS, "windowSize"  },
+    { "canvasScaleX", "Scale of the canvas relative to input width", OFFSET(canvasScaleX), AV_OPT_TYPE_DOUBLE, {.dbl=2}, 1, 8, .flags = FLAGS, "canvasScaleX"  },
+    { "canvasScaleY", "Scale of the canvas relative to input height", OFFSET(canvasScaleY), AV_OPT_TYPE_DOUBLE, {.dbl=2}, 1, 8, .flags = FLAGS, "canvasScaleY"  },
     { "smoothness", "Amount of smoothness to be applied on the camera trajectory to stabilize the video",  OFFSET(smoothness),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0.0, 16.0, FLAGS, "smoothness" },
     { NULL }
 };
@@ -76,11 +84,16 @@ static int config_props(AVFilterLink *outlink) {
   info.options[0] = veai->filename;
   info.options[1] = veai->filler;
   float smoothness = veai->smoothness;
-  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, 1, veai->canDownloadModels, &smoothness, 1, ctx)) {
+  float params[5] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY};
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 5, ctx)) {
     return AVERROR(EINVAL);
   }
   veai->pFrameProcessor = veai_create(&info);
-  return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
+  if(veai->pFrameProcessor == NULL) {
+    return AVERROR(EINVAL);
+  }
+  veai_stabilize_set_stc(veai->pFrameProcessor, veai->startTimecode);
+  return 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -107,7 +120,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     if(veai->previousFrame)
       av_frame_free(&veai->previousFrame);
     veai->previousFrame = in;
-    if(ioBuffer.output.timestamp < 0) {
+    if(ioBuffer.output.timestamp < veai->startTimecode) {
       av_frame_free(&out);
       av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
       return 0;

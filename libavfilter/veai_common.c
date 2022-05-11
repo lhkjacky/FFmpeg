@@ -39,7 +39,7 @@ int ff_veai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ct
 }
 
 int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
-                            int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
+                            int deviceIndex, int extraThreads, int vram, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
   ff_veai_handleLogging();
   if(ff_veai_checkModel(modelName, modelType, ctx) || ff_veai_checkDevice(deviceIndex, ctx) || ff_veai_checkScale(scale, ctx)) {
     return 1;
@@ -49,6 +49,7 @@ int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
   info->basic.scale = scale;
   info->basic.deviceIndex = deviceIndex;
   info->basic.extraThreadCount = extraThreads;
+  info->basic.maxMemory = vram;
   info->basic.canDownloadModel = canDownloadModels;
   info->basic.inputWidth = inlink->w;
   info->basic.inputHeight = inlink->h;
@@ -68,9 +69,9 @@ int ff_veai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
 }
 
 void* ff_veai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
-                            int deviceIndex, int extraThreads, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
+                            int deviceIndex, int extraThreads, int vram, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
   VideoProcessorInfo info;
-  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, processorName, modelName, modelType, deviceIndex, extraThreads, scale, canDownloadModels, pParameters, parameterCount, ctx))
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, processorName, modelName, modelType, deviceIndex, extraThreads, vram, scale, canDownloadModels, pParameters, parameterCount, ctx))
     return NULL;
   return veai_create(&info);
 }
