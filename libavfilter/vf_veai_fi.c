@@ -40,6 +40,7 @@ typedef struct  {
     char *model;
     int device, extraThreads;
     double slowmo;
+    double vram;
     int canDownloadModels;
     void* pFrameProcessor;
     unsigned int count;
@@ -53,11 +54,12 @@ typedef struct  {
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 static const AVOption veai_fi_options[] = {
     { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="chr-1"}, .flags = FLAGS },
-    { "slowmo",  "Slowmo factor of the input video",  OFFSET(slowmo),  AV_OPT_TYPE_DOUBLE, {.dbl=1.0}, 0.1, 16, FLAGS, "slowmo" },
-    { "fps", "output's frame rate, same as input frame rate if value is invalid", OFFSET(frame_rate), AV_OPT_TYPE_VIDEO_RATE, {.str = "30"}, 0, INT_MAX, FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
+    { "vram", "Max memory usage", OFFSET(vram), AV_OPT_TYPE_DOUBLE, {.dbl=1.0}, 0.1, 1, .flags = FLAGS, "vram"},
+    { "slowmo",  "Slowmo factor of the input video",  OFFSET(slowmo),  AV_OPT_TYPE_DOUBLE, {.dbl=1.0}, 0.1, 16, FLAGS, "slowmo" },
+    { "fps", "output's frame rate, same as input frame rate if value is invalid", OFFSET(frame_rate), AV_OPT_TYPE_VIDEO_RATE, {.str = "30"}, 0, INT_MAX, FLAGS },
     { NULL }
 };
 
@@ -82,7 +84,7 @@ static int config_props(AVFilterLink *outlink) {
     av_log(ctx, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", veai->fpsFactor, 1/veai->fpsFactor);
 
     threshold = veai->fpsFactor*0.3;
-    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"fi", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, 1, veai->canDownloadModels, &threshold, 1, ctx);
+    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, (char*)"fi", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, &threshold, 1, ctx);
     outlink->time_base = inlink->time_base;
     if(veai->frame_rate.num > 0) {
         AVRational frFactor = av_div_q(veai->frame_rate, inlink->frame_rate);
