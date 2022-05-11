@@ -85,7 +85,7 @@ static int config_props(AVFilterLink *outlink) {
   info.options[1] = veai->filler;
   float smoothness = veai->smoothness;
   float params[5] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY};
-  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, &smoothness, 5, ctx)) {
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 5, ctx)) {
     return AVERROR(EINVAL);
   }
   veai->pFrameProcessor = veai_create(&info);
