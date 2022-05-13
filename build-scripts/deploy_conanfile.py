@@ -1,11 +1,11 @@
 from conans import ConanFile, tools
 
 class conanRecipe(ConanFile):
-	name = "ffmpeg"
+	name = "topaz-ffmpeg"
 	settings = ("os", "build_type", "arch")
 
 	def requirements(self):
-		self.requires("videoai/0.5.4")
+		self.requires("videoai/0.5.11")
 		if self.settings.os == "Macos":
 		    self.requires("openh264/2.2.0")
 		    self.requires("libvpx/1.11.0")

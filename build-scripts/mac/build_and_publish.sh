@@ -13,8 +13,8 @@ VEAI_ENABLED=$5
 
 cd ../..
 DO_CONAN_EXPORT=1 CONAN_PACKAGES=${TOPAZ_CONAN} PKG_VERSION=${VERSION} bash build-scripts/mac/build_mac.sh $VEAI_ENABLED ./builds-arm ./builds-x86 ./builds-univ '' ''
-cp build-scripts/deploy_conanfile.py ${TOPAZ_CONAN}/prebuilt/ffmpeg/${VERSION}/conanfile.py
+cp build-scripts/deploy_conanfile.py ${TOPAZ_CONAN}/prebuilt/topaz-ffmpeg/${VERSION}/conanfile.py
 
 
 cd ${TOPAZ_CONAN}
-bash ./run_publish_prebuilt.sh --conan-channel ${CHANNEL} --conan-user ${USER} --package-name ffmpeg --package-version ${VERSION}
+bash ./run_publish_prebuilt.sh --conan-channel ${CHANNEL} --conan-user ${USER} --package-name topaz-ffmpeg --package-version ${VERSION}

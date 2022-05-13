@@ -7,14 +7,15 @@ if [ -z "$2" -o -z "$3" -o -z "$4" ]; then
 	exit 1
 fi;
 
-FLAGS=(--enable-libvpx --enable-libopenh264 --disable-ffplay --enable-shared --disable-static --disable-asm --enable-neon --disable-libxcb --disable-sdl2 --disable-xlib --extra-cflags="-I./conan_arm/include" --extra-ldflags="-L./conan_arm/lib")
-XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I./conan_x64/include" --extra-ldflags="-arch x86_64 -L./conan_x64/lib" --disable-ffplay --enable-cross-compile --enable-shared --enable-libvpx --enable-libopenh264 --disable-libxcb --disable-sdl2 --disable-xlib)
+FLAGS=(--enable-libvpx --enable-libopenh264 --enable-openssl --disable-ffplay --enable-shared --disable-static --disable-asm --enable-neon --disable-libxcb --disable-sdl2 --disable-xlib --extra-cflags="-I./conan_arm/include" --extra-ldflags="-L./conan_arm/lib")
+XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I./conan_x64/include" --extra-ldflags="-arch x86_64 -L./conan_x64/lib" --disable-ffplay --enable-cross-compile --enable-shared --enable-libvpx --enable-openssl --enable-libopenh264 --disable-libxcb --disable-sdl2 --disable-xlib)
 if [[ "$1" -eq 1 ]]; then
 	bash ./build-scripts/mac/conan_mac.sh
 	CONAN_X64=./conan_x64
 	CONAN_ARM=./conan_arm
+	export PATH=${CONAN_X64}/bin:${CONAN_ARM}/bin:$PATH
 	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib -headerpad_max_install_names $6" --enable-veai ${FLAGS[@]})
-	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --disable-ffplay --disable-libxcb --disable-sdl2 --disable-xlib)
+	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libopenh264 --enable-libvpx --enable-openssl --disable-ffplay --disable-libxcb --disable-sdl2 --disable-xlib)
 fi
 
 # libopenh264's location must be manually specified in some situations
@@ -33,14 +34,15 @@ set -e
 shopt -s extglob
 
 #export PKG_CONFIG_PATH=$OPENH264_ARM_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
-make clean
+export OLD_TARGET=${MACOSX_DEPLOYMENT_TARGET}
+export MACOSX_DEPLOYMENT_TARGET=11.0
 echo ./configure --prefix="$2" "${FLAGS[@]}"
-./configure --prefix="$2" "${FLAGS[@]}"
+CFLAGS="-mmacosx-version-min=11.0" LDFLAGS="-mmacosx-version-min=11.0" ./configure --prefix="$2" "${FLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
-	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
-	cp -Rp "$2"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
+	mkdir -p ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
+	cp -Rp "$2"/* ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac_armv8/build_type\=Release/
 fi
 if [ ! -z "$CONAN_ARM" ]; then
 	cp "$CONAN_ARM/lib/"*".dylib" $2/lib/
@@ -50,20 +52,25 @@ if [ ! -z "$OPENH264_ARM" ]; then
 fi
 
 #export PKG_CONFIG_PATH=$OPENH264_X86_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
-make clean
+export MACOSX_DEPLOYMENT_TARGET=10.14
 echo ./configure --prefix="$3" "${XFLAGS[@]}"
-./configure --prefix="$3" "${XFLAGS[@]}"
+CFLAGS="-mmacosx-version-min=10.14" LDFLAGS="-mmacosx-version-min=10.14" ./configure --prefix="$3" "${XFLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
-	mkdir -p ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
-	cp -Rp "$3"/* ${CONAN_PACKAGES}/prebuilt/ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
+	mkdir -p ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
+	cp -Rp "$3"/* ${CONAN_PACKAGES}/prebuilt/topaz-ffmpeg/${PKG_VERSION}/profile_mac13.0/build_type\=Release/
 fi
 if [ ! -z "$CONAN_X64" ]; then
 	cp "$CONAN_X64/lib/"*".dylib" $3/lib/
 fi
 if [ ! -z "$OPENH264_X64" ]; then
 	cp "$OPENH264_X64"/*".dylib" $3/lib
+fi
+
+#Stop here if we're in Azure
+if [ ! -z "${BUILD_REASON}" ]; then
+	exit 0
 fi
 
 #export PKG_CONFIG_PATH=$OLD_PKG_CONFIG_PATH
@@ -77,8 +84,10 @@ echo `pwd`
 
 shopt -s nullglob
 python3 ./build-scripts/mac/copy_deps.py $2/bin/deps "$2/bin/ff"*
-echo cp "$2/bin/deps/"*".dylib" $2/lib
-cp "$2/bin/deps/"*".dylib" $2/lib
+if [ ! -z "$2/bin/deps/"*".dylib" ]; then
+	echo cp "$2/bin/deps/"*".dylib" $2/lib
+	cp "$2/bin/deps/"*".dylib" $2/lib
+fi
 rm -rf $2/bin/deps
 
 mkdir -p $2/lib/deps
@@ -92,8 +101,10 @@ rm -rf $2/lib/deps
 
 mkdir -p $3/bin/deps
 python3 ./build-scripts/mac/copy_deps.py $3/bin/deps "$3/bin/ff"*
-echo cp "$3/bin/deps/"*".dylib" $3/lib
-cp "$3/bin/deps/"*".dylib" $3/lib
+if [ ! -z "$3/bin/deps/"*".dylib" ]; then
+	echo cp "$3/bin/deps/"*".dylib" $3/lib
+	cp "$3/bin/deps/"*".dylib" $3/lib
+fi
 rm -rf $3/bin/deps
 
 mkdir -p $3/lib/deps
@@ -134,3 +145,5 @@ done
 
 bash build-scripts/mac/copy_qt_framework.sh $HOME/Qt/6.2.4/macos ${UNIVERSAL_DIR}
 bash build-scripts/mac/package_bundle.sh ${UNIVERSAL_DIR} build-dmg "Topaz Video Enhance AI 3"
+
+export MACOSX_DEPLOYMENT_TARGET=${OLD_TARGET}
