@@ -86,7 +86,7 @@ static int config_props(AVFilterLink *outlink) {
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
     VideoProcessorInfo info;
     info.frameCount = veai->estimateFrameCount;
-    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (veai->estimateFrameCount > 0) ? (char*)"ad" : (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads, veai->vram, 
+    if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (veai->estimateFrameCount > 0) ? (char*)"ad" : (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads, veai->vram,
                                                     veai->scale, veai->canDownloadModels, parameter_values, 6, ctx)) {
       return AVERROR(EINVAL);
     }
@@ -105,6 +105,9 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
+    if(veai->estimateFrameCount+1 == inlink->frame_count_in) {
+        ff_veai_handleQueue(veai->pFrameProcessor, outlink, veai->previousFrame, ctx);
+    }
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->previousFrame == NULL);
     out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
     if(veai->pFrameProcessor == NULL || out == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {

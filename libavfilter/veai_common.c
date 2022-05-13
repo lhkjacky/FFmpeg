@@ -122,6 +122,34 @@ int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *i
     return 0;
 }
 
+int ff_veai_handleQueue(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
+    veai_end_stream(pProcessor);
+    int i, n = veai_queued_frames(pProcessor);
+    for(i=0;i<n;i++) {
+        VEAIBuffer oBuffer;
+        AVFrame *out = ff_veai_prepareBufferOutput(outlink, &oBuffer);
+        if(pProcessor == NULL || out == NULL ||veai_process_front(pProcessor, &oBuffer)) {
+            av_log(ctx, AV_LOG_ERROR, "The processing has failed");
+            av_frame_free(&in);
+            return AVERROR(ENOSYS);
+        }
+        av_frame_copy_props(out, in);
+        out->pts = oBuffer.timestamp;
+        if(oBuffer.timestamp < 0) {
+          av_frame_free(&out);
+          av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
+          //return AVERROR(ENOSYS);
+          continue;
+        }
+        av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
+        int code = ff_filter_frame(outlink, out);
+        if(code) {
+          return code;
+        }
+    }
+    return 0;
+}
+
 int ff_veai_estimateParam(AVFilterContext* ctx, void* pProcessor, AVFrame* in, int isFirstFrame, float *parameters) {
     IOBuffer ioBuffer;
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, isFirstFrame);

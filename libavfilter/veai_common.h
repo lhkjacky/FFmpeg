@@ -24,5 +24,6 @@ void ff_veai_prepareIOBufferInput(IOBuffer* ioBuffer, AVFrame *in, FrameType fra
 AVFrame* ff_veai_prepareBufferOutput(AVFilterLink *outlink, VEAIBuffer* oBuffer);
 int ff_veai_estimateParam(AVFilterContext* ctx, void* pProcessor, AVFrame* in, int isFirstFrame, float *parameters);
 int ff_veai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx);
+int ff_veai_handleQueue(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx);
 
 #endif
