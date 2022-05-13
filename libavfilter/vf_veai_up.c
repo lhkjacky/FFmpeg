@@ -105,7 +105,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterLink *outlink = ctx->outputs[0];
     AVFrame *out;
     IOBuffer ioBuffer;
-    if(veai->estimateFrameCount+1 == inlink->frame_count_in) {
+    if(veai->estimateFrameCount > 0 && veai->estimateFrameCount+1 == inlink->frame_count_in) {
         ff_veai_handleQueue(veai->pFrameProcessor, outlink, veai->previousFrame, ctx);
     }
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->previousFrame == NULL);
