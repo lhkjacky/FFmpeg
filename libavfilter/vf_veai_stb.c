@@ -45,7 +45,7 @@ typedef struct VEAIStbContext {
     double vram;
     void* pFrameProcessor;
     double smoothness;
-    int postFlight, windowSize;
+    int postFlight, windowSize, cacheSize, stabR, stabX, stabY, stabZ;
     double readStartTime, writeStartTime, canvasScaleX, canvasScaleY;
     AVFrame* previousFrame;
 } VEAIStbContext;
@@ -66,6 +66,11 @@ static const AVOption veai_stb_options[] = {
     { "canvasScaleX", "Scale of the canvas relative to input width", OFFSET(canvasScaleX), AV_OPT_TYPE_DOUBLE, {.dbl=2}, 1, 8, .flags = FLAGS, "canvasScaleX"  },
     { "canvasScaleY", "Scale of the canvas relative to input height", OFFSET(canvasScaleY), AV_OPT_TYPE_DOUBLE, {.dbl=2}, 1, 8, .flags = FLAGS, "canvasScaleY"  },
     { "smoothness", "Amount of smoothness to be applied on the camera trajectory to stabilize the video",  OFFSET(smoothness),  AV_OPT_TYPE_DOUBLE, {.dbl=6.0}, 0.0, 16.0, FLAGS, "smoothness" },
+    { "cacheSize", "Set memory cache size", OFFSET(cacheSize), AV_OPT_TYPE_INT, {.i64=128}, 0, 256, .flags = FLAGS, "cacheSize" },
+    { "stabR", "Enable rotation stabilization", OFFSET(stabR), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabR" },
+    { "stabX", "Enable x-direction stabilization", OFFSET(stabX), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabX" },
+    { "stabY", "Enable y-direction stabilization", OFFSET(stabY), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabY" },
+    { "stabZ", "Enable zoom stabilization", OFFSET(stabZ), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabZ" },
     { NULL }
 };
 
@@ -86,8 +91,8 @@ static int config_props(AVFilterLink *outlink) {
   info.options[0] = veai->filename;
   info.options[1] = veai->filler;
   float smoothness = veai->smoothness;
-  float params[5] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY};
-  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 5, ctx)) {
+  float params[10] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY, veai->cacheSize, veai->stabR, veai->stabX, veai->stabY, veai->stabZ};
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 10, ctx)) {
     return AVERROR(EINVAL);
   }
   veai->pFrameProcessor = veai_create(&info);
