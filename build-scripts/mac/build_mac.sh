@@ -37,7 +37,7 @@ shopt -s extglob
 export OLD_TARGET=${MACOSX_DEPLOYMENT_TARGET}
 export MACOSX_DEPLOYMENT_TARGET=11.0
 echo ./configure --prefix="$2" "${FLAGS[@]}"
-CFLAGS="-mmacosx-version-min=11.0" LDFLAGS="-mmacosx-version-min=11.0" ./configure --prefix="$2" "${FLAGS[@]}"
+CFLAGS="-mmacosx-version-min=11.0 -fexceptions" LDFLAGS="-mmacosx-version-min=11.0" ./configure --prefix="$2" "${FLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
@@ -54,7 +54,7 @@ fi
 #export PKG_CONFIG_PATH=$OPENH264_X86_PKG_CONFIG_PATH:$OLD_PKG_CONFIG_PATH
 export MACOSX_DEPLOYMENT_TARGET=10.14
 echo ./configure --prefix="$3" "${XFLAGS[@]}"
-CFLAGS="-mmacosx-version-min=10.14" LDFLAGS="-mmacosx-version-min=10.14" ./configure --prefix="$3" "${XFLAGS[@]}"
+CFLAGS="-mmacosx-version-min=10.14 -fexceptions" LDFLAGS="-mmacosx-version-min=10.14" ./configure --prefix="$3" "${XFLAGS[@]}"
 make clean
 make -j8 install
 if [ ! -z "$DO_CONAN_EXPORT" ]; then
