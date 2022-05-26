@@ -8,12 +8,14 @@ class conanRecipe(ConanFile):
     settings = ("os", "build_type", "arch")
 
     def configure(self):
+        self.options["opencv"].with_videoio = True
+        self.options["opencv"].with_ffmpeg = True
         if self.settings.os == "Macos":
             self.options["libvpx"].shared = True
 
 
     def requirements(self):
-        self.requires("videoai/0.6.7")
+        self.requires("videoai/0.6.8")
         if self.settings.os == "Macos":
             self.requires("openh264/2.2.0")
             self.requires("libvpx/1.11.0")
