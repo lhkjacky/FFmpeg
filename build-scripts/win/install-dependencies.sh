@@ -7,7 +7,7 @@ if [[ -z "$DEPENDENCIES_DIR" ]]; then
 	exit 1
 fi
 
-pacman -S --noconfirm mingw-w64-x86_64-nasm mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 make pkg-config diffutils yasm git wget
+pacman -S --noconfirm mingw-w64-x86_64-nasm mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 make pkgconf diffutils yasm git wget
 cd ${DEPENDENCIES_DIR}
 
 mkdir -p nv_sdk
