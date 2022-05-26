@@ -35,6 +35,7 @@
 #include "video.h"
 #include "veai.h"
 #include "veai_common.h"
+#include "float.h"
 
 typedef struct VEAIStbContext {
     const AVClass *class;
@@ -44,8 +45,8 @@ typedef struct VEAIStbContext {
     double vram;
     void* pFrameProcessor;
     double smoothness;
-    int startTimecode, postFlight, windowSize;
-    double canvasScaleX, canvasScaleY;
+    int postFlight, windowSize, cacheSize, stabR, stabX, stabY, stabZ;
+    double readStartTime, writeStartTime, canvasScaleX, canvasScaleY;
     AVFrame* previousFrame;
 } VEAIStbContext;
 
@@ -58,12 +59,18 @@ static const AVOption veai_stb_options[] = {
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
     { "vram", "Max memory usage", OFFSET(vram), AV_OPT_TYPE_DOUBLE, {.dbl=1.0}, 0.1, 1, .flags = FLAGS, "vram"},
     { "filename", "CPE output filename", OFFSET(filename), AV_OPT_TYPE_STRING, {.str="cpe.json"}, .flags = FLAGS, "filename"},
-    { "stc", "Start timecode for output", OFFSET(startTimecode), AV_OPT_TYPE_INT, {.i64=0}, 0, LLONG_MAX, .flags = FLAGS, "stc" },
+    { "rst", "Read start time relative to CPE", OFFSET(readStartTime), AV_OPT_TYPE_DOUBLE, {.dbl=0}, 0, DBL_MAX, .flags = FLAGS, "rst" },
+    { "wst", "Write start time relative to read start time (rst)", OFFSET(writeStartTime), AV_OPT_TYPE_DOUBLE, {.dbl=0}, 0, DBL_MAX, .flags = FLAGS, "wst" },
     { "postFlight", "Enable postflight", OFFSET(postFlight), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "postFlight"  },
     { "windowSize", "Window size of stabilization estimation", OFFSET(windowSize), AV_OPT_TYPE_INT, {.i64=64}, 0, 512, .flags = FLAGS, "windowSize"  },
     { "canvasScaleX", "Scale of the canvas relative to input width", OFFSET(canvasScaleX), AV_OPT_TYPE_DOUBLE, {.dbl=2}, 1, 8, .flags = FLAGS, "canvasScaleX"  },
     { "canvasScaleY", "Scale of the canvas relative to input height", OFFSET(canvasScaleY), AV_OPT_TYPE_DOUBLE, {.dbl=2}, 1, 8, .flags = FLAGS, "canvasScaleY"  },
-    { "smoothness", "Amount of smoothness to be applied on the camera trajectory to stabilize the video",  OFFSET(smoothness),  AV_OPT_TYPE_DOUBLE, {.dbl=0.5}, 0.0, 16.0, FLAGS, "smoothness" },
+    { "smoothness", "Amount of smoothness to be applied on the camera trajectory to stabilize the video",  OFFSET(smoothness),  AV_OPT_TYPE_DOUBLE, {.dbl=6.0}, 0.0, 16.0, FLAGS, "smoothness" },
+    { "cacheSize", "Set memory cache size", OFFSET(cacheSize), AV_OPT_TYPE_INT, {.i64=128}, 0, 256, .flags = FLAGS, "cacheSize" },
+    { "stabR", "Enable rotation stabilization", OFFSET(stabR), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabR" },
+    { "stabX", "Enable x-direction stabilization", OFFSET(stabX), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabX" },
+    { "stabY", "Enable y-direction stabilization", OFFSET(stabY), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabY" },
+    { "stabZ", "Enable zoom stabilization", OFFSET(stabZ), AV_OPT_TYPE_INT, {.i64=1}, 0, 1, .flags = FLAGS, "stabZ" },
     { NULL }
 };
 
@@ -84,15 +91,15 @@ static int config_props(AVFilterLink *outlink) {
   info.options[0] = veai->filename;
   info.options[1] = veai->filler;
   float smoothness = veai->smoothness;
-  float params[5] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY};
-  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 5, ctx)) {
+  float params[10] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY, veai->cacheSize, veai->stabR, veai->stabX, veai->stabY, veai->stabZ};
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"st", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 10, ctx)) {
     return AVERROR(EINVAL);
   }
   veai->pFrameProcessor = veai_create(&info);
   if(veai->pFrameProcessor == NULL) {
     return AVERROR(EINVAL);
   }
-  veai_stabilize_set_stc(veai->pFrameProcessor, veai->startTimecode);
+  veai_stabilize_set_stc(veai->pFrameProcessor, veai->readStartTime, veai->writeStartTime);
   return 0;
 }
 
@@ -120,7 +127,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     if(veai->previousFrame)
       av_frame_free(&veai->previousFrame);
     veai->previousFrame = in;
-    if(ioBuffer.output.timestamp < veai->startTimecode) {
+    if(ioBuffer.output.timestamp < 0) {
       av_frame_free(&out);
       av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %lf %lf\n", veai->model, its, TS2T(ioBuffer.output.timestamp, outlink->time_base));
       return 0;
