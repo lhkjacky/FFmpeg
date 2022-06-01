@@ -101,9 +101,7 @@ static int config_props(AVFilterLink *outlink) {
   }
   veai_stabilize_set_stc(veai->pFrameProcessor, veai->readStartTime, veai->writeStartTime);
   if(!veai->enableFullFrame) {
-    int* outputSize = veai_stabilize_get_output_size(veai->pFrameProcessor);
-    outlink->w = outputSize[0];
-    outlink->h = outputSize[1];
+    veai_stabilize_get_output_size(veai->pFrameProcessor, &(outlink->w), &(outlink->h));
     av_log(NULL, AV_LOG_VERBOSE, "Auto-crop stabilization output size: %d x %d\n", outlink->w, outlink->h);
   }
   return 0;
