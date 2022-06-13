@@ -15,3 +15,6 @@ class conanRecipe(ConanFile):
 			self.copy("*")
 		if self.settings.os == "Macos":
 			self.copy("*")
+
+    def package_info(self):
+        files = self.cpp_info.libs = tools.collect_libs(self)
