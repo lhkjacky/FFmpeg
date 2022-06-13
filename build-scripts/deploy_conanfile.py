@@ -17,4 +17,6 @@ class conanRecipe(ConanFile):
 			self.copy("*")
 
 	def package_info(self):
-		files = self.cpp_info.libs = tools.collect_libs(self)
+        if self.settings.os == "Windows":
+	        self.cpp_info.libdirs = ['bin']
+        self.cpp_info.libs = tools.collect_libs(self)
