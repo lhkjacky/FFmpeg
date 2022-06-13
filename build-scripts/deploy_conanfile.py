@@ -17,4 +17,4 @@ class conanRecipe(ConanFile):
 			self.copy("*")
 
     def package_info(self):
-      files = self.cpp_info.libs = tools.collect_libs(self)
+        files = self.cpp_info.libs = tools.collect_libs(self)
