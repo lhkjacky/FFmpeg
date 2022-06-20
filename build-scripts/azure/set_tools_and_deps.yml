@@ -50,7 +50,6 @@ steps:
   - task: Cache@2
     inputs:
       key: 'conan | "$(Agent.OS)" | $(Build.SourcesDirectory)/FFmpeg/build-scripts/conanfile.py | $(Build.SourcesDirectory)/FFmpeg/build-scripts/deploy_conanfile.py'
-      restoreKeys: 'conan | "$(Agent.OS)"'
       path: '${{ parameters.CONAN_USER_HOME }}/.conan/data'
       cacheHitVar: CONAN_CACHE_RESTORED
     condition: and(succeeded(), eq('${{ parameters.SHOULD_RESTORE_CONAN_CACHE }}', 'true'))
