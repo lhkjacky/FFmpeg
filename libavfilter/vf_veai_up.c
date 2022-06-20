@@ -41,7 +41,7 @@ typedef struct VEAIUpContext {
     char *model;
     int device, scale, extraThreads;
     int canDownloadModels;
-    int estimateFrameCount, count, estimating;
+    int estimateFrameCount, count, estimating, w, h;
     double vram;
     double preBlur, noise, details, halo, blur, compression;
     void* pFrameProcessor;
@@ -53,7 +53,9 @@ typedef struct VEAIUpContext {
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 static const AVOption veai_up_options[] = {
     { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="amq-13"}, .flags = FLAGS },
-    { "scale",  "Output scale",  OFFSET(scale),  AV_OPT_TYPE_INT, {.i64=1}, 0, 10, FLAGS, "scale" },
+    { "scale",  "Output scale",  OFFSET(scale),  AV_OPT_TYPE_INT, {.i64=1}, 0, 4, FLAGS, "scale" },
+    { "w",  "Estimate scale based on output width",  OFFSET(w),  AV_OPT_TYPE_INT, {.i64=0}, 0, 100000, FLAGS, "w" },
+    { "h",  "Estimate scale based on output height",  OFFSET(h),  AV_OPT_TYPE_INT, {.i64=0}, 0, 100000, FLAGS, "h" },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
@@ -85,9 +87,15 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterLink *inlink = ctx->inputs[0];
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
     VideoProcessorInfo info;
+    int scale = veai->scale;
+    if(scale == 0) {
+      float x = veai->w/inlink->w, y = veai->h/inlink->h;
+      float v = x > y ? x : y;
+      scale = (v > 2.4) ? 4 : (v > 1.2 ? 2 : 1);
+    }
     info.frameCount = veai->estimateFrameCount;
     if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (veai->estimateFrameCount > 0) ? (char*)"ad" : (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads, veai->vram,
-                                                    veai->scale, veai->canDownloadModels, parameter_values, 6, ctx)) {
+                                                    scale, veai->canDownloadModels, parameter_values, 6, ctx)) {
       return AVERROR(EINVAL);
     }
     veai->pFrameProcessor = veai_create(&info);
