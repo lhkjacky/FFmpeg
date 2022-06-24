@@ -41,6 +41,7 @@
 #include "libavutil/intreadwrite.h"
 
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "internal.h"
 
 #define BLOCK_TYPE_AUDIO    1
@@ -84,7 +85,7 @@ static av_cold int vmdaudio_decode_init(AVCodecContext *avctx)
     }
 
     av_channel_layout_uninit(&avctx->ch_layout);
-    av_channel_layout_default(&avctx->ch_layout, channels == 1);
+    av_channel_layout_default(&avctx->ch_layout, channels);
 
     if (avctx->bits_per_coded_sample == 16)
         avctx->sample_fmt = AV_SAMPLE_FMT_S16;
@@ -131,10 +132,9 @@ static void decode_audio_s16(int16_t *out, const uint8_t *buf, int buf_size,
     }
 }
 
-static int vmdaudio_decode_frame(AVCodecContext *avctx, void *data,
+static int vmdaudio_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                                  int *got_frame_ptr, AVPacket *avpkt)
 {
-    AVFrame *frame     = data;
     const uint8_t *buf = avpkt->data;
     const uint8_t *buf_end;
     int buf_size = avpkt->size;
@@ -228,14 +228,14 @@ static int vmdaudio_decode_frame(AVCodecContext *avctx, void *data,
     return avpkt->size;
 }
 
-const AVCodec ff_vmdaudio_decoder = {
-    .name           = "vmdaudio",
-    .long_name      = NULL_IF_CONFIG_SMALL("Sierra VMD audio"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_VMDAUDIO,
+const FFCodec ff_vmdaudio_decoder = {
+    .p.name         = "vmdaudio",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Sierra VMD audio"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_VMDAUDIO,
     .priv_data_size = sizeof(VmdAudioContext),
     .init           = vmdaudio_decode_init,
-    .decode         = vmdaudio_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DR1,
+    FF_CODEC_DECODE_CB(vmdaudio_decode_frame),
+    .p.capabilities = AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

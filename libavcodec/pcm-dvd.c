@@ -26,6 +26,7 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
+#include "codec_internal.h"
 #include "internal.h"
 
 typedef struct PCMDVDContext {
@@ -224,10 +225,9 @@ static void *pcm_dvd_decode_samples(AVCodecContext *avctx, const uint8_t *src,
     }
 }
 
-static int pcm_dvd_decode_frame(AVCodecContext *avctx, void *data,
+static int pcm_dvd_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                                 int *got_frame_ptr, AVPacket *avpkt)
 {
-    AVFrame *frame     = data;
     const uint8_t *src = avpkt->data;
     int buf_size       = avpkt->size;
     PCMDVDContext *s   = avctx->priv_data;
@@ -295,17 +295,17 @@ static int pcm_dvd_decode_frame(AVCodecContext *avctx, void *data,
     return avpkt->size;
 }
 
-const AVCodec ff_pcm_dvd_decoder = {
-    .name           = "pcm_dvd",
-    .long_name      = NULL_IF_CONFIG_SMALL("PCM signed 16|20|24-bit big-endian for DVD media"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_PCM_DVD,
+const FFCodec ff_pcm_dvd_decoder = {
+    .p.name         = "pcm_dvd",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("PCM signed 16|20|24-bit big-endian for DVD media"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_PCM_DVD,
     .priv_data_size = sizeof(PCMDVDContext),
     .init           = pcm_dvd_decode_init,
-    .decode         = pcm_dvd_decode_frame,
-    .capabilities   = AV_CODEC_CAP_CHANNEL_CONF |
+    FF_CODEC_DECODE_CB(pcm_dvd_decode_frame),
+    .p.capabilities = AV_CODEC_CAP_CHANNEL_CONF |
                       AV_CODEC_CAP_DR1,
-    .sample_fmts    = (const enum AVSampleFormat[]) {
+    .p.sample_fmts  = (const enum AVSampleFormat[]) {
         AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_NONE
     },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,

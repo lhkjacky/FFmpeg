@@ -55,6 +55,7 @@
 #include "libavutil/float_dsp.h"
 #include "avcodec.h"
 #include "bytestream.h"
+#include "codec_internal.h"
 #include "get_bits.h"
 #include "internal.h"
 #include "speexdata.h"
@@ -1532,11 +1533,10 @@ static void speex_decode_stereo(float *data, int frame_size, StereoState *stereo
     }
 }
 
-static int speex_decode_frame(AVCodecContext *avctx, void *data,
+static int speex_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                               int *got_frame_ptr, AVPacket *avpkt)
 {
     SpeexContext *s = avctx->priv_data;
-    AVFrame *frame = data;
     const float scale = 1.f / 32768.f;
     int buf_size = avpkt->size;
     float *dst;
@@ -1576,15 +1576,15 @@ static av_cold int speex_decode_close(AVCodecContext *avctx)
     return 0;
 }
 
-const AVCodec ff_speex_decoder = {
-    .name           = "speex",
-    .long_name      = NULL_IF_CONFIG_SMALL("Speex"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_SPEEX,
+const FFCodec ff_speex_decoder = {
+    .p.name         = "speex",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Speex"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_SPEEX,
     .init           = speex_decode_init,
-    .decode         = speex_decode_frame,
+    FF_CODEC_DECODE_CB(speex_decode_frame),
     .close          = speex_decode_close,
-    .capabilities   = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
+    .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
     .priv_data_size = sizeof(SpeexContext),
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };

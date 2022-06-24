@@ -40,6 +40,7 @@
 #include "libavutil/intreadwrite.h"
 #include "avcodec.h"
 #include "bytestream.h"
+#include "codec_internal.h"
 #include "internal.h"
 #include "mathops.h"
 
@@ -206,12 +207,11 @@ static av_cold int dpcm_decode_init(AVCodecContext *avctx)
 }
 
 
-static int dpcm_decode_frame(AVCodecContext *avctx, void *data,
+static int dpcm_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                              int *got_frame_ptr, AVPacket *avpkt)
 {
     int buf_size = avpkt->size;
     DPCMContext *s = avctx->priv_data;
-    AVFrame *frame = data;
     int out = 0, ret;
     int predictor[2];
     int ch = 0;
@@ -410,15 +410,15 @@ static int dpcm_decode_frame(AVCodecContext *avctx, void *data,
 }
 
 #define DPCM_DECODER(id_, name_, long_name_)                \
-const AVCodec ff_ ## name_ ## _decoder = {                        \
-    .name           = #name_,                               \
-    .long_name      = NULL_IF_CONFIG_SMALL(long_name_),     \
-    .type           = AVMEDIA_TYPE_AUDIO,                   \
-    .id             = id_,                                  \
+const FFCodec ff_ ## name_ ## _decoder = {                  \
+    .p.name         = #name_,                               \
+    .p.long_name    = NULL_IF_CONFIG_SMALL(long_name_),     \
+    .p.type         = AVMEDIA_TYPE_AUDIO,                   \
+    .p.id           = id_,                                  \
+    .p.capabilities = AV_CODEC_CAP_DR1,                     \
     .priv_data_size = sizeof(DPCMContext),                  \
     .init           = dpcm_decode_init,                     \
-    .decode         = dpcm_decode_frame,                    \
-    .capabilities   = AV_CODEC_CAP_DR1,                     \
+    FF_CODEC_DECODE_CB(dpcm_decode_frame),                  \
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,         \
 }
 

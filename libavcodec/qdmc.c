@@ -31,6 +31,7 @@
 
 #include "avcodec.h"
 #include "bytestream.h"
+#include "codec_internal.h"
 #include "get_bits.h"
 #include "internal.h"
 
@@ -168,7 +169,7 @@ static av_cold void qdmc_init_static_data(void)
     int i;
 
     for (unsigned i = 0, offset = 0; i < FF_ARRAY_ELEMS(vtable); i++) {
-        static VLC_TYPE vlc_buffer[13698][2];
+        static VLCElem vlc_buffer[13698];
         vtable[i].table           = &vlc_buffer[offset];
         vtable[i].table_allocated = FF_ARRAY_ELEMS(vlc_buffer) - offset;
         ff_init_vlc_from_lengths(&vtable[i], huff_bits[i], huff_sizes[i],
@@ -695,11 +696,10 @@ static av_cold void qdmc_flush(AVCodecContext *avctx)
     s->buffer_offset = 0;
 }
 
-static int qdmc_decode_frame(AVCodecContext *avctx, void *data,
+static int qdmc_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                              int *got_frame_ptr, AVPacket *avpkt)
 {
     QDMCContext *s = avctx->priv_data;
-    AVFrame *frame = data;
     GetBitContext gb;
     int ret;
 
@@ -728,16 +728,16 @@ static int qdmc_decode_frame(AVCodecContext *avctx, void *data,
     return ret;
 }
 
-const AVCodec ff_qdmc_decoder = {
-    .name             = "qdmc",
-    .long_name        = NULL_IF_CONFIG_SMALL("QDesign Music Codec 1"),
-    .type             = AVMEDIA_TYPE_AUDIO,
-    .id               = AV_CODEC_ID_QDMC,
+const FFCodec ff_qdmc_decoder = {
+    .p.name           = "qdmc",
+    .p.long_name      = NULL_IF_CONFIG_SMALL("QDesign Music Codec 1"),
+    .p.type           = AVMEDIA_TYPE_AUDIO,
+    .p.id             = AV_CODEC_ID_QDMC,
     .priv_data_size   = sizeof(QDMCContext),
     .init             = qdmc_decode_init,
     .close            = qdmc_decode_close,
-    .decode           = qdmc_decode_frame,
+    FF_CODEC_DECODE_CB(qdmc_decode_frame),
     .flush            = qdmc_flush,
-    .capabilities     = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
+    .p.capabilities   = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
     .caps_internal    = FF_CODEC_CAP_INIT_THREADSAFE,
 };

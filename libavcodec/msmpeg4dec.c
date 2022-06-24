@@ -27,7 +27,7 @@
 #include "libavutil/thread.h"
 
 #include "avcodec.h"
-#include "internal.h"
+#include "codec_internal.h"
 #include "mpegutils.h"
 #include "mpegvideo.h"
 #include "msmpeg4.h"
@@ -348,7 +348,7 @@ static av_cold void msmpeg4_decode_init_static(void)
                     &ff_v2_mb_type[0][0], 2, 1, 128);
 
     for (unsigned i = 0, offset = 0; i < 4; i++) {
-        static VLC_TYPE vlc_buf[1636 + 2648 + 1532 + 2488][2];
+        static VLCElem vlc_buf[1636 + 2648 + 1532 + 2488];
         ff_mb_non_intra_vlc[i].table           = &vlc_buf[offset];
         ff_mb_non_intra_vlc[i].table_allocated = FF_ARRAY_ELEMS(vlc_buf) - offset;
         init_vlc(&ff_mb_non_intra_vlc[i], MB_NON_INTRA_VLC_BITS, 128,
@@ -864,77 +864,77 @@ void ff_msmpeg4_decode_motion(MpegEncContext *s, int *mx_ptr, int *my_ptr)
     *my_ptr = my;
 }
 
-const AVCodec ff_msmpeg4v1_decoder = {
-    .name           = "msmpeg4v1",
-    .long_name      = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 1"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_MSMPEG4V1,
+const FFCodec ff_msmpeg4v1_decoder = {
+    .p.name         = "msmpeg4v1",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 1"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_MSMPEG4V1,
     .priv_data_size = sizeof(MpegEncContext),
     .init           = ff_msmpeg4_decode_init,
     .close          = ff_h263_decode_end,
-    .decode         = ff_h263_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
+    FF_CODEC_DECODE_CB(ff_h263_decode_frame),
+    .p.capabilities = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
                       FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
-    .max_lowres     = 3,
-    .pix_fmts       = (const enum AVPixelFormat[]) {
+    .p.max_lowres   = 3,
+    .p.pix_fmts     = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV420P,
         AV_PIX_FMT_NONE
     },
 };
 
-const AVCodec ff_msmpeg4v2_decoder = {
-    .name           = "msmpeg4v2",
-    .long_name      = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 2"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_MSMPEG4V2,
+const FFCodec ff_msmpeg4v2_decoder = {
+    .p.name         = "msmpeg4v2",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 2"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_MSMPEG4V2,
     .priv_data_size = sizeof(MpegEncContext),
     .init           = ff_msmpeg4_decode_init,
     .close          = ff_h263_decode_end,
-    .decode         = ff_h263_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
+    FF_CODEC_DECODE_CB(ff_h263_decode_frame),
+    .p.capabilities = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
                       FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
-    .max_lowres     = 3,
-    .pix_fmts       = (const enum AVPixelFormat[]) {
+    .p.max_lowres   = 3,
+    .p.pix_fmts     = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV420P,
         AV_PIX_FMT_NONE
     },
 };
 
-const AVCodec ff_msmpeg4v3_decoder = {
-    .name           = "msmpeg4",
-    .long_name      = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 3"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_MSMPEG4V3,
+const FFCodec ff_msmpeg4v3_decoder = {
+    .p.name         = "msmpeg4",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("MPEG-4 part 2 Microsoft variant version 3"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_MSMPEG4V3,
     .priv_data_size = sizeof(MpegEncContext),
     .init           = ff_msmpeg4_decode_init,
     .close          = ff_h263_decode_end,
-    .decode         = ff_h263_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
+    FF_CODEC_DECODE_CB(ff_h263_decode_frame),
+    .p.capabilities = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
                       FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
-    .max_lowres     = 3,
-    .pix_fmts       = (const enum AVPixelFormat[]) {
+    .p.max_lowres   = 3,
+    .p.pix_fmts     = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV420P,
         AV_PIX_FMT_NONE
     },
 };
 
-const AVCodec ff_wmv1_decoder = {
-    .name           = "wmv1",
-    .long_name      = NULL_IF_CONFIG_SMALL("Windows Media Video 7"),
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = AV_CODEC_ID_WMV1,
+const FFCodec ff_wmv1_decoder = {
+    .p.name         = "wmv1",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Windows Media Video 7"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_WMV1,
     .priv_data_size = sizeof(MpegEncContext),
     .init           = ff_msmpeg4_decode_init,
     .close          = ff_h263_decode_end,
-    .decode         = ff_h263_decode_frame,
-    .capabilities   = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
+    FF_CODEC_DECODE_CB(ff_h263_decode_frame),
+    .p.capabilities = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
                       FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
-    .max_lowres     = 3,
-    .pix_fmts       = (const enum AVPixelFormat[]) {
+    .p.max_lowres   = 3,
+    .p.pix_fmts     = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV420P,
         AV_PIX_FMT_NONE
     },

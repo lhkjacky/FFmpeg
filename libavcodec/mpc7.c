@@ -32,6 +32,7 @@
 #include "libavutil/thread.h"
 
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "get_bits.h"
 #include "internal.h"
 #include "mpegaudiodsp.h"
@@ -43,7 +44,7 @@ static VLC scfi_vlc, dscf_vlc, hdr_vlc, quant_vlc[MPC7_QUANT_VLC_TABLES][2];
 
 static av_cold void mpc7_init_static(void)
 {
-    static VLC_TYPE quant_tables[7224][2];
+    static VLCElem quant_tables[7224];
     const uint8_t *raw_quant_table = mpc7_quant_vlcs;
 
     INIT_VLC_STATIC_FROM_LENGTHS(&scfi_vlc, MPC7_SCFI_BITS, MPC7_SCFI_SIZE,
@@ -171,10 +172,9 @@ static int get_scale_idx(GetBitContext *gb, int ref)
     return ref + t;
 }
 
-static int mpc7_decode_frame(AVCodecContext * avctx, void *data,
+static int mpc7_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                              int *got_frame_ptr, AVPacket *avpkt)
 {
-    AVFrame *frame     = data;
     const uint8_t *buf = avpkt->data;
     int buf_size;
     MPCContext *c = avctx->priv_data;
@@ -309,18 +309,18 @@ static av_cold int mpc7_decode_close(AVCodecContext *avctx)
     return 0;
 }
 
-const AVCodec ff_mpc7_decoder = {
-    .name           = "mpc7",
-    .long_name      = NULL_IF_CONFIG_SMALL("Musepack SV7"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_MUSEPACK7,
+const FFCodec ff_mpc7_decoder = {
+    .p.name         = "mpc7",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Musepack SV7"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_MUSEPACK7,
     .priv_data_size = sizeof(MPCContext),
     .init           = mpc7_decode_init,
     .close          = mpc7_decode_close,
-    .decode         = mpc7_decode_frame,
+    FF_CODEC_DECODE_CB(mpc7_decode_frame),
     .flush          = mpc7_decode_flush,
-    .capabilities   = AV_CODEC_CAP_DR1,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16P,
+    .p.capabilities = AV_CODEC_CAP_DR1,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16P,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

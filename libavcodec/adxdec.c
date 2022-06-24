@@ -22,6 +22,7 @@
 #include "libavutil/intreadwrite.h"
 #include "avcodec.h"
 #include "adx.h"
+#include "codec_internal.h"
 #include "get_bits.h"
 #include "internal.h"
 
@@ -92,10 +93,9 @@ static int adx_decode(ADXContext *c, int16_t *out, int offset,
     return 0;
 }
 
-static int adx_decode_frame(AVCodecContext *avctx, void *data,
+static int adx_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                             int *got_frame_ptr, AVPacket *avpkt)
 {
-    AVFrame *frame      = data;
     int buf_size        = avpkt->size;
     ADXContext *c       = avctx->priv_data;
     int16_t **samples;
@@ -190,18 +190,18 @@ static void adx_decode_flush(AVCodecContext *avctx)
     c->eof = 0;
 }
 
-const AVCodec ff_adpcm_adx_decoder = {
-    .name           = "adpcm_adx",
-    .long_name      = NULL_IF_CONFIG_SMALL("SEGA CRI ADX ADPCM"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_ADPCM_ADX,
+const FFCodec ff_adpcm_adx_decoder = {
+    .p.name         = "adpcm_adx",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("SEGA CRI ADX ADPCM"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_ADPCM_ADX,
     .priv_data_size = sizeof(ADXContext),
     .init           = adx_decode_init,
-    .decode         = adx_decode_frame,
+    FF_CODEC_DECODE_CB(adx_decode_frame),
     .flush          = adx_decode_flush,
-    .capabilities   = AV_CODEC_CAP_CHANNEL_CONF |
+    .p.capabilities = AV_CODEC_CAP_CHANNEL_CONF |
                       AV_CODEC_CAP_DR1,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16P,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16P,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

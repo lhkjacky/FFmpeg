@@ -22,6 +22,7 @@
 #include <celt/celt.h>
 #include <celt/celt_header.h>
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "internal.h"
 #include "libavutil/intreadwrite.h"
 
@@ -102,11 +103,10 @@ static av_cold int libcelt_dec_close(AVCodecContext *c)
     return 0;
 }
 
-static int libcelt_dec_decode(AVCodecContext *c, void *data,
+static int libcelt_dec_decode(AVCodecContext *c, AVFrame *frame,
                               int *got_frame_ptr, AVPacket *pkt)
 {
     struct libcelt_context *celt = c->priv_data;
-    AVFrame *frame = data;
     int err;
     int16_t *pcm;
 
@@ -127,15 +127,15 @@ static int libcelt_dec_decode(AVCodecContext *c, void *data,
     return pkt->size;
 }
 
-const AVCodec ff_libcelt_decoder = {
-    .name           = "libcelt",
-    .long_name      = NULL_IF_CONFIG_SMALL("Xiph CELT decoder using libcelt"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_CELT,
+const FFCodec ff_libcelt_decoder = {
+    .p.name         = "libcelt",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Xiph CELT decoder using libcelt"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_CELT,
+    .p.capabilities = AV_CODEC_CAP_DR1,
+    .p.wrapper_name = "libcelt",
     .priv_data_size = sizeof(struct libcelt_context),
     .init           = libcelt_dec_init,
     .close          = libcelt_dec_close,
-    .decode         = libcelt_dec_decode,
-    .capabilities   = AV_CODEC_CAP_DR1,
-    .wrapper_name   = "libcelt",
+    FF_CODEC_DECODE_CB(libcelt_dec_decode),
 };

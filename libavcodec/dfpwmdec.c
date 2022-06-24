@@ -28,6 +28,7 @@
 #include "libavutil/internal.h"
 #include "avcodec.h"
 #include "codec_id.h"
+#include "codec_internal.h"
 #include "internal.h"
 
 typedef struct {
@@ -99,11 +100,10 @@ static av_cold int dfpwm_dec_init(struct AVCodecContext *ctx)
     return 0;
 }
 
-static int dfpwm_dec_frame(struct AVCodecContext *ctx, void *data,
-    int *got_frame, struct AVPacket *packet)
+static int dfpwm_dec_frame(struct AVCodecContext *ctx, AVFrame *frame,
+                           int *got_frame, struct AVPacket *packet)
 {
     DFPWMState *state = ctx->priv_data;
-    AVFrame *frame = data;
     int ret;
 
     if (packet->size * 8LL % ctx->ch_layout.nb_channels)
@@ -124,14 +124,14 @@ static int dfpwm_dec_frame(struct AVCodecContext *ctx, void *data,
     return packet->size;
 }
 
-const AVCodec ff_dfpwm_decoder = {
-    .name           = "dfpwm",
-    .long_name      = NULL_IF_CONFIG_SMALL("DFPWM1a audio"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_DFPWM,
+const FFCodec ff_dfpwm_decoder = {
+    .p.name         = "dfpwm",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("DFPWM1a audio"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_DFPWM,
     .priv_data_size = sizeof(DFPWMState),
     .init           = dfpwm_dec_init,
-    .decode         = dfpwm_dec_frame,
-    .capabilities   = AV_CODEC_CAP_DR1,
+    FF_CODEC_DECODE_CB(dfpwm_dec_frame),
+    .p.capabilities = AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

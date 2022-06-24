@@ -23,8 +23,8 @@
 #include "config_components.h"
 
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "encode.h"
-#include "internal.h"
 #include "put_bits.h"
 #include "audio_frame_queue.h"
 #include "libavutil/channel_layout.h"
@@ -1165,6 +1165,7 @@ static int write_access_unit(MLPEncodeContext *ctx, uint8_t *buf,
  *  lossless_check_data that will be written to the restart header.
  */
 static void input_data_internal(MLPEncodeContext *ctx, const uint8_t *samples,
+                                int nb_samples,
                                 int is24)
 {
     int32_t *lossless_check_data = ctx->lossless_check_data;
@@ -1177,7 +1178,7 @@ static void input_data_internal(MLPEncodeContext *ctx, const uint8_t *samples,
 
     lossless_check_data += ctx->frame_index;
 
-    for (int i = 0; i < ctx->avctx->frame_size; i++) {
+    for (int i = 0; i < nb_samples; i++) {
         for (unsigned int channel = 0; channel <= rh->max_channel; channel++) {
             uint32_t abs_sample;
             int32_t sample;
@@ -1186,8 +1187,7 @@ static void input_data_internal(MLPEncodeContext *ctx, const uint8_t *samples,
 
             /* TODO Find out if number_sbits can be used for negative values. */
             abs_sample = FFABS(sample);
-            if (greatest < abs_sample)
-                greatest = abs_sample;
+            greatest = FFMAX(greatest, abs_sample);
 
             temp_lossless_check_data ^= (sample & 0x00ffffff) << channel;
             *sample_buffer++ = sample;
@@ -1202,12 +1202,9 @@ static void input_data_internal(MLPEncodeContext *ctx, const uint8_t *samples,
 }
 
 /** Wrapper function for inputting data in two different bit-depths. */
-static void input_data(MLPEncodeContext *ctx, void *samples)
+static void input_data(MLPEncodeContext *ctx, void *samples, int nb_samples)
 {
-    if (ctx->avctx->sample_fmt == AV_SAMPLE_FMT_S32)
-        input_data_internal(ctx, samples, 1);
-    else
-        input_data_internal(ctx, samples, 0);
+    input_data_internal(ctx, samples, nb_samples, ctx->avctx->sample_fmt == AV_SAMPLE_FMT_S32);
 }
 
 static void input_to_sample_buffer(MLPEncodeContext *ctx)
@@ -2074,6 +2071,9 @@ static int mlp_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
     int restart_frame, ret;
     uint8_t *data;
 
+    if (!frame && !ctx->last_frames)
+        ctx->last_frames = (ctx->afq.remaining_samples + avctx->frame_size - 1) / avctx->frame_size;
+
     if (!frame && !ctx->last_frames--)
         return 0;
 
@@ -2084,7 +2084,6 @@ static int mlp_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
         /* add current frame to queue */
         if ((ret = ff_af_queue_add(&ctx->afq, frame)) < 0)
             return ret;
-        ctx->last_frames = ctx->max_restart_interval;
     }
 
     data = frame ? frame->data[0] : NULL;
@@ -2123,12 +2122,13 @@ static int mlp_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
 
 input_and_return:
 
-    if (frame)
+    if (frame) {
         ctx->shorten_by = avctx->frame_size - frame->nb_samples;
-    ctx->next_major_frame_size += avctx->frame_size;
-    ctx->next_major_number_of_frames++;
+        ctx->next_major_frame_size += avctx->frame_size;
+        ctx->next_major_number_of_frames++;
+    }
     if (data)
-        input_data(ctx, data);
+        input_data(ctx, data, frame->nb_samples);
 
     restart_frame = (ctx->frame_index + 1) % ctx->min_restart_interval;
 
@@ -2167,11 +2167,13 @@ input_and_return:
         }
     }
 
-    if (!frame)
+    if (!frame && ctx->last_frames < ctx->max_restart_interval - 1)
         avctx->frame_number++;
 
     if (bytes_written > 0) {
-        ff_af_queue_remove(&ctx->afq, avctx->frame_size, &avpkt->pts,
+        ff_af_queue_remove(&ctx->afq,
+                           FFMIN(avctx->frame_size, ctx->afq.remaining_samples),
+                           &avpkt->pts,
                            &avpkt->duration);
 
         av_shrink_packet(avpkt, bytes_written);
@@ -2206,42 +2208,42 @@ static av_cold int mlp_encode_close(AVCodecContext *avctx)
 }
 
 #if CONFIG_MLP_ENCODER
-const AVCodec ff_mlp_encoder = {
-    .name                   ="mlp",
-    .long_name              = NULL_IF_CONFIG_SMALL("MLP (Meridian Lossless Packing)"),
-    .type                   = AVMEDIA_TYPE_AUDIO,
-    .id                     = AV_CODEC_ID_MLP,
+const FFCodec ff_mlp_encoder = {
+    .p.name                 ="mlp",
+    .p.long_name            = NULL_IF_CONFIG_SMALL("MLP (Meridian Lossless Packing)"),
+    .p.type                 = AVMEDIA_TYPE_AUDIO,
+    .p.id                   = AV_CODEC_ID_MLP,
     .priv_data_size         = sizeof(MLPEncodeContext),
     .init                   = mlp_encode_init,
-    .encode2                = mlp_encode_frame,
+    FF_CODEC_ENCODE_CB(mlp_encode_frame),
     .close                  = mlp_encode_close,
-    .capabilities           = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_EXPERIMENTAL,
-    .sample_fmts            = (const enum AVSampleFormat[]) {AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_NONE},
-    .supported_samplerates  = (const int[]) {44100, 48000, 88200, 96000, 176400, 192000, 0},
+    .p.capabilities         = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_EXPERIMENTAL,
+    .p.sample_fmts          = (const enum AVSampleFormat[]) {AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_NONE},
+    .p.supported_samplerates = (const int[]) {44100, 48000, 88200, 96000, 176400, 192000, 0},
 #if FF_API_OLD_CHANNEL_LAYOUT
-    .channel_layouts        = ff_mlp_channel_layouts,
+    .p.channel_layouts      = ff_mlp_channel_layouts,
 #endif
-    .ch_layouts             = ff_mlp_ch_layouts,
+    .p.ch_layouts           = ff_mlp_ch_layouts,
     .caps_internal          = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };
 #endif
 #if CONFIG_TRUEHD_ENCODER
-const AVCodec ff_truehd_encoder = {
-    .name                   ="truehd",
-    .long_name              = NULL_IF_CONFIG_SMALL("TrueHD"),
-    .type                   = AVMEDIA_TYPE_AUDIO,
-    .id                     = AV_CODEC_ID_TRUEHD,
+const FFCodec ff_truehd_encoder = {
+    .p.name                 ="truehd",
+    .p.long_name            = NULL_IF_CONFIG_SMALL("TrueHD"),
+    .p.type                 = AVMEDIA_TYPE_AUDIO,
+    .p.id                   = AV_CODEC_ID_TRUEHD,
     .priv_data_size         = sizeof(MLPEncodeContext),
     .init                   = mlp_encode_init,
-    .encode2                = mlp_encode_frame,
+    FF_CODEC_ENCODE_CB(mlp_encode_frame),
     .close                  = mlp_encode_close,
-    .capabilities           = AV_CODEC_CAP_SMALL_LAST_FRAME | AV_CODEC_CAP_DELAY | AV_CODEC_CAP_EXPERIMENTAL,
-    .sample_fmts            = (const enum AVSampleFormat[]) {AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_NONE},
-    .supported_samplerates  = (const int[]) {44100, 48000, 88200, 96000, 176400, 192000, 0},
+    .p.capabilities         = AV_CODEC_CAP_SMALL_LAST_FRAME | AV_CODEC_CAP_DELAY | AV_CODEC_CAP_EXPERIMENTAL,
+    .p.sample_fmts          = (const enum AVSampleFormat[]) {AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_NONE},
+    .p.supported_samplerates = (const int[]) {44100, 48000, 88200, 96000, 176400, 192000, 0},
 #if FF_API_OLD_CHANNEL_LAYOUT
-    .channel_layouts        = (const uint64_t[]) {AV_CH_LAYOUT_STEREO, AV_CH_LAYOUT_5POINT0_BACK, AV_CH_LAYOUT_5POINT1_BACK, 0},
+    .p.channel_layouts      = (const uint64_t[]) {AV_CH_LAYOUT_STEREO, AV_CH_LAYOUT_5POINT0_BACK, AV_CH_LAYOUT_5POINT1_BACK, 0},
 #endif
-    .ch_layouts             = (const AVChannelLayout[]) {
+    .p.ch_layouts           = (const AVChannelLayout[]) {
                                   AV_CHANNEL_LAYOUT_STEREO,
                                   AV_CHANNEL_LAYOUT_5POINT0_BACK,
                                   AV_CHANNEL_LAYOUT_5POINT1_BACK,

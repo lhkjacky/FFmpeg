@@ -91,6 +91,7 @@
 
 #include "libavutil/channel_layout.h"
 #include "libavutil/thread.h"
+#include "internal.h"
 
 static VLC vlc_scalefactors;
 static VLC vlc_spectral[11];
@@ -1220,8 +1221,8 @@ static void aacdec_init(AACContext *ac);
 
 static av_cold void aac_static_table_init(void)
 {
-    static VLC_TYPE vlc_buf[304 + 270 + 550 + 300 + 328 +
-                            294 + 306 + 268 + 510 + 366 + 462][2];
+    static VLCElem vlc_buf[304 + 270 + 550 + 300 + 328 +
+                           294 + 306 + 268 + 510 + 366 + 462];
     for (unsigned i = 0, offset = 0; i < 11; i++) {
         vlc_spectral[i].table           = &vlc_buf[offset];
         vlc_spectral[i].table_allocated = FF_ARRAY_ELEMS(vlc_buf) - offset;
@@ -1820,7 +1821,7 @@ static int decode_spectrum_and_dequant(AACContext *ac, INTFLOAT coef[1024],
 #if !USE_FIXED
                 const float *vq = ff_aac_codebook_vector_vals[cbt_m1];
 #endif /* !USE_FIXED */
-                VLC_TYPE (*vlc_tab)[2] = vlc_spectral[cbt_m1].table;
+                const VLCElem *vlc_tab = vlc_spectral[cbt_m1].table;
                 OPEN_READER(re, gb);
 
                 switch (cbt_m1 >> 1) {
@@ -3234,7 +3235,7 @@ static int aac_decode_er_frame(AVCodecContext *avctx, void *data,
     return 0;
 }
 
-static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
+static int aac_decode_frame_int(AVCodecContext *avctx, AVFrame *frame,
                                 int *got_frame_ptr, GetBitContext *gb,
                                 const AVPacket *avpkt)
 {
@@ -3247,7 +3248,7 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
     int payload_alignment;
     uint8_t che_presence[4][MAX_ELEM_ID] = {{0}};
 
-    ac->frame = data;
+    ac->frame = frame;
 
     if (show_bits(gb, 12) == 0xfff) {
         if ((err = parse_adts_frame_header(ac, gb)) < 0) {
@@ -3436,9 +3437,9 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
                                           &(AVChannelLayout)AV_CHANNEL_LAYOUT_STEREO);
     if (is_dmono) {
         if (ac->dmono_mode == 1)
-            ((AVFrame *)data)->data[1] =((AVFrame *)data)->data[0];
+            frame->data[1] = frame->data[0];
         else if (ac->dmono_mode == 2)
-            ((AVFrame *)data)->data[0] =((AVFrame *)data)->data[1];
+            frame->data[0] = frame->data[1];
     }
 
     return 0;
@@ -3447,7 +3448,7 @@ fail:
     return err;
 }
 
-static int aac_decode_frame(AVCodecContext *avctx, void *data,
+static int aac_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                             int *got_frame_ptr, AVPacket *avpkt)
 {
     AACContext *ac = avctx->priv_data;
@@ -3494,10 +3495,10 @@ static int aac_decode_frame(AVCodecContext *avctx, void *data,
     case AOT_ER_AAC_LTP:
     case AOT_ER_AAC_LD:
     case AOT_ER_AAC_ELD:
-        err = aac_decode_er_frame(avctx, data, got_frame_ptr, &gb);
+        err = aac_decode_er_frame(avctx, frame, got_frame_ptr, &gb);
         break;
     default:
-        err = aac_decode_frame_int(avctx, data, got_frame_ptr, &gb, avpkt);
+        err = aac_decode_frame_int(avctx, frame, got_frame_ptr, &gb, avpkt);
     }
     if (err < 0)
         return err;
@@ -3549,8 +3550,9 @@ static void aacdec_init(AACContext *c)
 #endif
 
 #if !USE_FIXED
-    if(ARCH_MIPS)
-        ff_aacdec_init_mips(c);
+#if ARCH_MIPS
+    ff_aacdec_init_mips(c);
+#endif
 #endif /* !USE_FIXED */
 }
 /**

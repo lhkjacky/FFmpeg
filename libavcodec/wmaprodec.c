@@ -97,6 +97,7 @@
 #include "libavutil/thread.h"
 
 #include "avcodec.h"
+#include "codec_internal.h"
 #include "internal.h"
 #include "get_bits.h"
 #include "put_bits.h"
@@ -402,7 +403,7 @@ static av_cold int decode_init(WMAProDecodeCtx *s, AVCodecContext *avctx, int nu
         s->decode_flags    = AV_RL16(edata_ptr+14);
         channel_mask       = AV_RL32(edata_ptr+2);
         s->bits_per_sample = AV_RL16(edata_ptr);
-        s->nb_channels     = avctx->ch_layout.nb_channels;
+        s->nb_channels     = channel_mask ? av_popcount(channel_mask) : avctx->ch_layout.nb_channels;
 
         if (s->bits_per_sample > 32 || s->bits_per_sample < 1) {
             avpriv_request_sample(avctx, "bits per sample is %d", s->bits_per_sample);
@@ -1609,7 +1610,7 @@ static void save_bits(WMAProDecodeCtx *s, GetBitContext* gb, int len,
 }
 
 static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
-                         void *data, int *got_frame_ptr, AVPacket *avpkt)
+                         AVFrame *frame, int *got_frame_ptr, AVPacket *avpkt)
 {
     GetBitContext* gb  = &s->pgb;
     const uint8_t* buf = avpkt->data;
@@ -1621,7 +1622,6 @@ static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
     *got_frame_ptr = 0;
 
     if (!buf_size) {
-        AVFrame *frame = data;
         int i;
 
         /** Must output remaining samples after stream end. WMAPRO 5.1 created
@@ -1713,7 +1713,7 @@ static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
 
             /** decode the cross packet frame if it is valid */
             if (!s->packet_loss)
-                decode_frame(s, data, got_frame_ptr);
+                decode_frame(s, frame, got_frame_ptr);
         } else if (s->num_saved_bits - s->frame_offset) {
             ff_dlog(avctx, "ignoring %x previously saved bits\n",
                     s->num_saved_bits - s->frame_offset);
@@ -1744,7 +1744,7 @@ static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
             frame_size <= remaining_bits(s, gb)) {
             save_bits(s, gb, frame_size, 0);
             if (!s->packet_loss)
-                s->packet_done = !decode_frame(s, data, got_frame_ptr);
+                s->packet_done = !decode_frame(s, frame, got_frame_ptr);
         } else if (!s->len_prefix
                    && s->num_saved_bits > get_bits_count(&s->gb)) {
             /** when the frames do not have a length prefix, we don't know
@@ -1754,7 +1754,7 @@ static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
                 therefore we save the incoming packet first, then we append
                 the "previous frame" data from the next packet so that
                 we get a buffer that only contains full frames */
-            s->packet_done = !decode_frame(s, data, got_frame_ptr);
+            s->packet_done = !decode_frame(s, frame, got_frame_ptr);
         } else {
             s->packet_done = 1;
         }
@@ -1777,8 +1777,6 @@ static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
         return AVERROR_INVALIDDATA;
 
     if (s->trim_start && avctx->codec_id == AV_CODEC_ID_WMAPRO) {
-        AVFrame *frame = data;
-
         if (s->trim_start < frame->nb_samples) {
             for (int ch = 0; ch < frame->ch_layout.nb_channels; ch++)
                 frame->extended_data[ch] += s->trim_start * 4;
@@ -1792,8 +1790,6 @@ static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
     }
 
     if (s->trim_end && avctx->codec_id == AV_CODEC_ID_WMAPRO) {
-        AVFrame *frame = data;
-
         if (s->trim_end < frame->nb_samples) {
             frame->nb_samples -= s->trim_end;
         } else {
@@ -1813,11 +1809,10 @@ static int decode_packet(AVCodecContext *avctx, WMAProDecodeCtx *s,
  *@param avpkt input packet
  *@return number of bytes that were read from the input buffer
  */
-static int wmapro_decode_packet(AVCodecContext *avctx, void *data,
+static int wmapro_decode_packet(AVCodecContext *avctx, AVFrame *frame,
                                 int *got_frame_ptr, AVPacket *avpkt)
 {
     WMAProDecodeCtx *s = avctx->priv_data;
-    AVFrame *frame = data;
     int ret;
 
     /* get output buffer */
@@ -1827,15 +1822,14 @@ static int wmapro_decode_packet(AVCodecContext *avctx, void *data,
         return 0;
     }
 
-    return decode_packet(avctx, s, data, got_frame_ptr, avpkt);
+    return decode_packet(avctx, s, frame, got_frame_ptr, avpkt);
 }
 
-static int xma_decode_packet(AVCodecContext *avctx, void *data,
+static int xma_decode_packet(AVCodecContext *avctx, AVFrame *frame,
                              int *got_frame_ptr, AVPacket *avpkt)
 {
     XMADecodeCtx *s = avctx->priv_data;
     int got_stream_frame_ptr = 0;
-    AVFrame *frame = data;
     int i, ret = 0, eof = 0;
 
     if (!s->frames[s->current_stream]->data[0]) {
@@ -2086,49 +2080,49 @@ static void xma_flush(AVCodecContext *avctx)
 /**
  *@brief wmapro decoder
  */
-const AVCodec ff_wmapro_decoder = {
-    .name           = "wmapro",
-    .long_name      = NULL_IF_CONFIG_SMALL("Windows Media Audio 9 Professional"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_WMAPRO,
+const FFCodec ff_wmapro_decoder = {
+    .p.name         = "wmapro",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Windows Media Audio 9 Professional"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_WMAPRO,
     .priv_data_size = sizeof(WMAProDecodeCtx),
     .init           = wmapro_decode_init,
     .close          = wmapro_decode_end,
-    .decode         = wmapro_decode_packet,
-    .capabilities   = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1,
+    FF_CODEC_DECODE_CB(wmapro_decode_packet),
+    .p.capabilities = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1,
     .flush          = wmapro_flush,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };
 
-const AVCodec ff_xma1_decoder = {
-    .name           = "xma1",
-    .long_name      = NULL_IF_CONFIG_SMALL("Xbox Media Audio 1"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_XMA1,
+const FFCodec ff_xma1_decoder = {
+    .p.name         = "xma1",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Xbox Media Audio 1"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_XMA1,
     .priv_data_size = sizeof(XMADecodeCtx),
     .init           = xma_decode_init,
     .close          = xma_decode_end,
-    .decode         = xma_decode_packet,
-    .capabilities   = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+    FF_CODEC_DECODE_CB(xma_decode_packet),
+    .p.capabilities = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };
 
-const AVCodec ff_xma2_decoder = {
-    .name           = "xma2",
-    .long_name      = NULL_IF_CONFIG_SMALL("Xbox Media Audio 2"),
-    .type           = AVMEDIA_TYPE_AUDIO,
-    .id             = AV_CODEC_ID_XMA2,
+const FFCodec ff_xma2_decoder = {
+    .p.name         = "xma2",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("Xbox Media Audio 2"),
+    .p.type         = AVMEDIA_TYPE_AUDIO,
+    .p.id           = AV_CODEC_ID_XMA2,
     .priv_data_size = sizeof(XMADecodeCtx),
     .init           = xma_decode_init,
     .close          = xma_decode_end,
-    .decode         = xma_decode_packet,
+    FF_CODEC_DECODE_CB(xma_decode_packet),
     .flush          = xma_flush,
-    .capabilities   = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
-    .sample_fmts    = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+    .p.capabilities = AV_CODEC_CAP_SUBFRAMES | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY,
+    .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
                                                       AV_SAMPLE_FMT_NONE },
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };

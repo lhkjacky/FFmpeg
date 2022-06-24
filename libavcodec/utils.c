@@ -35,6 +35,7 @@
 #include "libavutil/pixfmt.h"
 #include "avcodec.h"
 #include "codec.h"
+#include "codec_internal.h"
 #include "hwconfig.h"
 #include "thread.h"
 #include "threadframe.h"
@@ -70,14 +71,20 @@ void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size)
         memset(*p, 0, min_size + AV_INPUT_BUFFER_PADDING_SIZE);
 }
 
-int av_codec_is_encoder(const AVCodec *codec)
+int av_codec_is_encoder(const AVCodec *avcodec)
 {
-    return codec && (codec->encode_sub || codec->encode2 || codec->receive_packet);
+    const FFCodec *const codec = ffcodec(avcodec);
+    return codec && (codec->cb_type == FF_CODEC_CB_TYPE_ENCODE     ||
+                     codec->cb_type == FF_CODEC_CB_TYPE_ENCODE_SUB ||
+                     codec->cb_type == FF_CODEC_CB_TYPE_RECEIVE_PACKET);
 }
 
-int av_codec_is_decoder(const AVCodec *codec)
+int av_codec_is_decoder(const AVCodec *avcodec)
 {
-    return codec && (codec->decode || codec->receive_frame);
+    const FFCodec *const codec = ffcodec(avcodec);
+    return codec && (codec->cb_type == FF_CODEC_CB_TYPE_DECODE     ||
+                     codec->cb_type == FF_CODEC_CB_TYPE_DECODE_SUB ||
+                     codec->cb_type == FF_CODEC_CB_TYPE_RECEIVE_FRAME);
 }
 
 int ff_set_dimensions(AVCodecContext *s, int width, int height)
@@ -434,7 +441,7 @@ void ff_color_frame(AVFrame *frame, const int c[4])
 }
 
 int avpriv_codec_get_cap_skip_frame_fill_param(const AVCodec *codec){
-    return !!(codec->caps_internal & FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM);
+    return !!(ffcodec(codec)->caps_internal & FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM);
 }
 
 const char *avcodec_get_name(enum AVCodecID id)
@@ -867,8 +874,9 @@ int ff_match_2uint16(const uint16_t(*tab)[2], int size, int a, int b)
     return i;
 }
 
-const AVCodecHWConfig *avcodec_get_hw_config(const AVCodec *codec, int index)
+const AVCodecHWConfig *avcodec_get_hw_config(const AVCodec *avcodec, int index)
 {
+    const FFCodec *const codec = ffcodec(avcodec);
     int i;
     if (!codec->hw_configs || index < 0)
         return NULL;
