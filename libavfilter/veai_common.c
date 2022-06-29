@@ -20,9 +20,7 @@ int ff_veai_checkScale(int scale, AVFilterContext* ctx) {
 
 void ff_veai_handleLogging() {
   int logLevel = av_log_get_level();
-  if(!(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE)) {
-      veai_disable_logging();
-  }
+  veai_set_logging(logLevel == AV_LOG_DEBUG || logLevel == AV_LOG_VERBOSE);
 }
 
 int ff_veai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ctx) {
