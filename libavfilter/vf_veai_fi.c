@@ -85,20 +85,20 @@ static int config_props(AVFilterLink *outlink) {
     av_log(ctx, AV_LOG_DEBUG, "Set time base to %d/%d %lf -> %d/%d %lf\n", inlink->time_base.num, inlink->time_base.den, av_q2d(inlink->time_base), outlink->time_base.num, outlink->time_base.den, av_q2d(outlink->time_base));
     av_log(ctx, AV_LOG_DEBUG, "Set frame rate to %lf -> %lf\n", av_q2d(inlink->frame_rate), av_q2d(outlink->frame_rate));
     av_log(ctx, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", veai->fpsFactor, 1/veai->fpsFactor);
-
-    threshold = veai->fpsFactor*0.3;
-    float params[2] = {threshold, veai->slowmo};
-    veai->isApollo = strncmp(veai->model, (char*)"apo", 3) == 0;
-    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, veai->isApollo ? (char*)"fis" : (char*)"fi", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 2, ctx);
-    outlink->time_base = inlink->time_base;
     if(veai->frame_rate.num > 0) {
         AVRational frFactor = av_div_q(veai->frame_rate, inlink->frame_rate);
         veai->fpsFactor = 1/(veai->slowmo*av_q2d(frFactor));
-        outlink->frame_rate = veai->frame_rate;
+        
     } else {
         outlink->frame_rate = inlink->frame_rate;
         veai->fpsFactor = 1/veai->slowmo;
     }
+    threshold = veai->fpsFactor*0.3;
+    float params[2] = {threshold, 1/veai->fpsFactor};
+    veai->isApollo = strncmp(veai->model, (char*)"apo", 3) == 0;
+    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, veai->isApollo ? (char*)"apo" : (char*)"chr", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 2, ctx);
+    outlink->time_base = inlink->time_base;
+    outlink->frame_rate = veai->frame_rate.num > 0 ? veai->frame_rate : inlink->frame_rate;
     return veai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
