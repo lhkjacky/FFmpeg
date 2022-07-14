@@ -73,6 +73,7 @@ static av_cold int init(AVFilterContext *ctx) {
     veai->count = 0;
     veai->position = 0;
     veai->previousPts = 0;
+    veai->currentPts = 0;
     return 0;
 }
 
@@ -109,7 +110,7 @@ static const enum AVPixelFormat pix_fmts[] = {
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     VEAIFIContext *veai = ctx->priv;
-    return veai->isApollo ? filter_frame_fi(inlink, in) : filter_frame_fi(inlink, in);
+    return veai->isApollo ? filter_frame_fis(inlink, in) : filter_frame_fi(inlink, in);
 }
 
 static int filter_frame_fi(AVFilterLink *inlink, AVFrame *in) {
@@ -166,10 +167,10 @@ static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in) {
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    if (veai->count > 2) {
+    if (veai->count > 1) {
         while(veai->position < veai->count - 1) {
             out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
-            location = veai->position - (veai->count - 1);
+            location = veai->position - (veai->count - 2);
             av_log(ctx, AV_LOG_DEBUG, "Process frame %f on current %d at %f\n", veai->position, veai->count, location);
             if(veai->pFrameProcessor == NULL || out == NULL || veai_interpolator_process(veai->pFrameProcessor, location, &ioBuffer)) {
                 av_log(ctx, AV_LOG_ERROR, "The processing has failed for intermediate frame\n");
@@ -177,7 +178,7 @@ static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in) {
                 return AVERROR(ENOSYS);
             }
             av_frame_copy_props(out, in);
-            out->pts = ((veai->currentPts - veai->previousPts)*location + in->pts)*veai->slowmo;
+            out->pts = ((veai->currentPts - veai->previousPts)*location + veai->previousPts)*veai->slowmo;
             ocount++;
             if(ff_filter_frame(outlink, out)) {
                 av_frame_free(&in);
@@ -186,9 +187,9 @@ static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in) {
             veai->position += veai->fpsFactor;
             av_log(ctx, AV_LOG_DEBUG, "Added frame at pts %lld %lf %d\n", out->pts, av_q2d(inlink->time_base)*out->pts, ocount);
         }
-        veai->currentPts = in->pts;
-        veai->previousPts = veai->currentPts;
     }
+    veai->previousPts = veai->currentPts;
+    veai->currentPts = in->pts;
     av_frame_free(&in);
     veai->count++;
     return 0;
