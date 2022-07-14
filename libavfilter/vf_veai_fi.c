@@ -87,8 +87,9 @@ static int config_props(AVFilterLink *outlink) {
     av_log(ctx, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", veai->fpsFactor, 1/veai->fpsFactor);
 
     threshold = veai->fpsFactor*0.3;
+    float params[2] = {threshold, veai->slowmo};
     veai->isApollo = strncmp(veai->model, (char*)"apo", 3) == 0;
-    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, veai->isApollo ? (char*)"fis" : (char*)"fi", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, &threshold, 1, ctx);
+    veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, veai->isApollo ? (char*)"fis" : (char*)"fi", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 2, ctx);
     outlink->time_base = inlink->time_base;
     if(veai->frame_rate.num > 0) {
         AVRational frFactor = av_div_q(veai->frame_rate, inlink->frame_rate);
