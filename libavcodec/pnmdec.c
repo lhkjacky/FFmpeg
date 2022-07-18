@@ -26,6 +26,7 @@
 #include "internal.h"
 #include "put_bits.h"
 #include "pnm.h"
+#include "half2float.h"
 
 static void samplecpy(uint8_t *dst, const uint8_t *src, int n, int maxval)
 {
@@ -39,13 +40,12 @@ static void samplecpy(uint8_t *dst, const uint8_t *src, int n, int maxval)
     }
 }
 
-static int pnm_decode_frame(AVCodecContext *avctx, void *data,
+static int pnm_decode_frame(AVCodecContext *avctx, AVFrame *p,
                             int *got_frame, AVPacket *avpkt)
 {
     const uint8_t *buf   = avpkt->data;
     int buf_size         = avpkt->size;
     PNMContext * const s = avctx->priv_data;
-    AVFrame * const p    = data;
     int i, j, k, n, linesize, h, upgrade = 0, is_mono = 0;
     unsigned char *ptr;
     int components, sample_len, ret;
@@ -259,6 +259,7 @@ static int pnm_decode_frame(AVCodecContext *avctx, void *data,
         }
         break;
     case AV_PIX_FMT_GBRPF32:
+        if (!s->half) {
         if (avctx->width * avctx->height * 12 > s->bytestream_end - s->bytestream)
             return AVERROR_INVALIDDATA;
         scale = 1.f / s->scale;
@@ -299,8 +300,68 @@ static int pnm_decode_frame(AVCodecContext *avctx, void *data,
                 b += p->linesize[1] / 4;
             }
         }
+        } else {
+            if (avctx->width * avctx->height * 6 > s->bytestream_end - s->bytestream)
+                return AVERROR_INVALIDDATA;
+            scale = 1.f / s->scale;
+            if (s->endian) {
+                float *r, *g, *b;
+
+                r = (float *)p->data[2];
+                g = (float *)p->data[0];
+                b = (float *)p->data[1];
+                for (int i = 0; i < avctx->height; i++) {
+                    for (int j = 0; j < avctx->width; j++) {
+                        r[j] = av_int2float(half2float(AV_RL16(s->bytestream+0),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        g[j] = av_int2float(half2float(AV_RL16(s->bytestream+2),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        b[j] = av_int2float(half2float(AV_RL16(s->bytestream+4),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        s->bytestream += 6;
+                    }
+
+                    r += p->linesize[2] / 4;
+                    g += p->linesize[0] / 4;
+                    b += p->linesize[1] / 4;
+                }
+            } else {
+                float *r, *g, *b;
+
+                r = (float *)p->data[2];
+                g = (float *)p->data[0];
+                b = (float *)p->data[1];
+                for (int i = 0; i < avctx->height; i++) {
+                    for (int j = 0; j < avctx->width; j++) {
+                        r[j] = av_int2float(half2float(AV_RB16(s->bytestream+0),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        g[j] = av_int2float(half2float(AV_RB16(s->bytestream+2),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        b[j] = av_int2float(half2float(AV_RB16(s->bytestream+4),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        s->bytestream += 6;
+                    }
+
+                    r += p->linesize[2] / 4;
+                    g += p->linesize[0] / 4;
+                    b += p->linesize[1] / 4;
+                }
+            }        }
         break;
     case AV_PIX_FMT_GRAYF32:
+        if (!s->half) {
         if (avctx->width * avctx->height * 4 > s->bytestream_end - s->bytestream)
             return AVERROR_INVALIDDATA;
         scale = 1.f / s->scale;
@@ -323,6 +384,36 @@ static int pnm_decode_frame(AVCodecContext *avctx, void *data,
                 g += p->linesize[0] / 4;
             }
         }
+        } else {
+            if (avctx->width * avctx->height * 2 > s->bytestream_end - s->bytestream)
+                return AVERROR_INVALIDDATA;
+            scale = 1.f / s->scale;
+            if (s->endian) {
+                float *g = (float *)p->data[0];
+                for (int i = 0; i < avctx->height; i++) {
+                    for (int j = 0; j < avctx->width; j++) {
+                        g[j] = av_int2float(half2float(AV_RL16(s->bytestream),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        s->bytestream += 2;
+                    }
+                    g += p->linesize[0] / 4;
+                }
+            } else {
+                float *g = (float *)p->data[0];
+                for (int i = 0; i < avctx->height; i++) {
+                    for (int j = 0; j < avctx->width; j++) {
+                        g[j] = av_int2float(half2float(AV_RB16(s->bytestream),
+                                                       s->mantissatable,
+                                                       s->exponenttable,
+                                                       s->offsettable)) * scale;
+                        s->bytestream += 2;
+                    }
+                    g += p->linesize[0] / 4;
+                }
+            }
+        }
         break;
     }
     *got_frame = 1;
@@ -339,7 +430,7 @@ const FFCodec ff_pgm_decoder = {
     .p.id           = AV_CODEC_ID_PGM,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(PNMContext),
-    .decode         = pnm_decode_frame,
+    FF_CODEC_DECODE_CB(pnm_decode_frame),
 };
 #endif
 
@@ -351,7 +442,7 @@ const FFCodec ff_pgmyuv_decoder = {
     .p.id           = AV_CODEC_ID_PGMYUV,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(PNMContext),
-    .decode         = pnm_decode_frame,
+    FF_CODEC_DECODE_CB(pnm_decode_frame),
 };
 #endif
 
@@ -363,7 +454,7 @@ const FFCodec ff_ppm_decoder = {
     .p.id           = AV_CODEC_ID_PPM,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(PNMContext),
-    .decode         = pnm_decode_frame,
+    FF_CODEC_DECODE_CB(pnm_decode_frame),
 };
 #endif
 
@@ -375,7 +466,7 @@ const FFCodec ff_pbm_decoder = {
     .p.id           = AV_CODEC_ID_PBM,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(PNMContext),
-    .decode         = pnm_decode_frame,
+    FF_CODEC_DECODE_CB(pnm_decode_frame),
 };
 #endif
 
@@ -387,7 +478,7 @@ const FFCodec ff_pam_decoder = {
     .p.id           = AV_CODEC_ID_PAM,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(PNMContext),
-    .decode         = pnm_decode_frame,
+    FF_CODEC_DECODE_CB(pnm_decode_frame),
 };
 #endif
 
@@ -399,6 +490,28 @@ const FFCodec ff_pfm_decoder = {
     .p.id           = AV_CODEC_ID_PFM,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(PNMContext),
-    .decode         = pnm_decode_frame,
+    FF_CODEC_DECODE_CB(pnm_decode_frame),
+};
+#endif
+
+#if CONFIG_PHM_DECODER
+static av_cold int phm_dec_init(AVCodecContext *avctx)
+{
+    PNMContext *s = avctx->priv_data;
+
+    half2float_table(s->mantissatable, s->exponenttable, s->offsettable);
+
+    return 0;
+}
+
+const FFCodec ff_phm_decoder = {
+    .p.name         = "phm",
+    .p.long_name    = NULL_IF_CONFIG_SMALL("PHM (Portable HalfFloatMap) image"),
+    .p.type         = AVMEDIA_TYPE_VIDEO,
+    .p.id           = AV_CODEC_ID_PHM,
+    .p.capabilities = AV_CODEC_CAP_DR1,
+    .priv_data_size = sizeof(PNMContext),
+    .init           = phm_dec_init,
+    FF_CODEC_DECODE_CB(pnm_decode_frame),
 };
 #endif

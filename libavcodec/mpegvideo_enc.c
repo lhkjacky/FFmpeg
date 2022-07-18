@@ -94,12 +94,7 @@ static uint8_t default_fcode_tab[MAX_MV * 2 + 1];
 
 static const AVOption mpv_generic_options[] = {
     FF_MPV_COMMON_OPTS
-#if FF_API_MPEGVIDEO_OPTS
-    FF_MPV_DEPRECATED_MPEG_QUANT_OPT
-    FF_MPV_DEPRECATED_A53_CC_OPT
-    FF_MPV_DEPRECATED_MATRIX_OPT
-    FF_MPV_DEPRECATED_BFRAME_OPTS
-#endif
+    FF_MPV_COMMON_MOTION_EST_OPTS
     { NULL },
 };
 
@@ -295,8 +290,9 @@ static void mpv_encode_defaults(MpegEncContext *s)
 
 av_cold int ff_dct_encode_init(MpegEncContext *s)
 {
-    if (ARCH_X86)
-        ff_dct_encode_init_x86(s);
+#if ARCH_X86
+    ff_dct_encode_init_x86(s);
+#endif
 
     if (CONFIG_H263_ENCODER)
         ff_h263dsp_init(&s->h263dsp);
@@ -1683,12 +1679,17 @@ int ff_mpv_encode_picture(AVCodecContext *avctx, AVPacket *pkt,
 
     /* output? */
     if (s->new_picture->data[0]) {
-        int growing_buffer = context_count == 1 && !pkt->data && !s->data_partitioning;
-        int pkt_size = growing_buffer ? FFMAX(s->mb_width*s->mb_height*64+10000, avctx->internal->byte_buffer_size) - AV_INPUT_BUFFER_PADDING_SIZE
-                                              :
-                                              s->mb_width*s->mb_height*(MAX_MB_BYTES+100)+10000;
+        int growing_buffer = context_count == 1 && !s->data_partitioning;
+        size_t pkt_size = 10000 + s->mb_width * s->mb_height *
+                                  (growing_buffer ? 64 : (MAX_MB_BYTES + 100));
+        if (CONFIG_MJPEG_ENCODER && avctx->codec_id == AV_CODEC_ID_MJPEG) {
+            ret = ff_mjpeg_add_icc_profile_size(avctx, s->new_picture, &pkt_size);
+            if (ret < 0)
+                return ret;
+        }
         if ((ret = ff_alloc_packet(avctx, pkt, pkt_size)) < 0)
             return ret;
+        pkt->size = avctx->internal->byte_buffer_size - AV_INPUT_BUFFER_PADDING_SIZE;
         if (s->mb_info) {
             s->mb_info_ptr = av_packet_new_side_data(pkt,
                                  AV_PKT_DATA_H263_MB_INFO,
@@ -2557,24 +2558,35 @@ static int sse(MpegEncContext *s, uint8_t *src1, uint8_t *src2, int w, int h, in
 static int sse_mb(MpegEncContext *s){
     int w= 16;
     int h= 16;
+    int chroma_mb_w = w >> s->chroma_x_shift;
+    int chroma_mb_h = h >> s->chroma_y_shift;
 
     if(s->mb_x*16 + 16 > s->width ) w= s->width - s->mb_x*16;
     if(s->mb_y*16 + 16 > s->height) h= s->height- s->mb_y*16;
 
     if(w==16 && h==16)
       if(s->avctx->mb_cmp == FF_CMP_NSSE){
-        return s->mecc.nsse[0](s, s->new_picture->data[0] + s->mb_x * 16 + s->mb_y * s->linesize   * 16, s->dest[0], s->linesize,   16) +
-               s->mecc.nsse[1](s, s->new_picture->data[1] + s->mb_x *  8 + s->mb_y * s->uvlinesize *  8, s->dest[1], s->uvlinesize,  8) +
-               s->mecc.nsse[1](s, s->new_picture->data[2] + s->mb_x *  8 + s->mb_y * s->uvlinesize *  8, s->dest[2], s->uvlinesize,  8);
+        return s->mecc.nsse[0](s, s->new_picture->data[0] + s->mb_x * 16 + s->mb_y * s->linesize * 16,
+                               s->dest[0], s->linesize, 16) +
+               s->mecc.nsse[1](s, s->new_picture->data[1] + s->mb_x * chroma_mb_w + s->mb_y * s->uvlinesize * chroma_mb_h,
+                               s->dest[1], s->uvlinesize, chroma_mb_h) +
+               s->mecc.nsse[1](s, s->new_picture->data[2] + s->mb_x * chroma_mb_w + s->mb_y * s->uvlinesize * chroma_mb_h,
+                               s->dest[2], s->uvlinesize, chroma_mb_h);
       }else{
-        return s->mecc.sse[0](NULL, s->new_picture->data[0] + s->mb_x * 16 + s->mb_y * s->linesize   * 16, s->dest[0], s->linesize,   16) +
-               s->mecc.sse[1](NULL, s->new_picture->data[1] + s->mb_x *  8 + s->mb_y * s->uvlinesize *  8, s->dest[1], s->uvlinesize,  8) +
-               s->mecc.sse[1](NULL, s->new_picture->data[2] + s->mb_x *  8 + s->mb_y * s->uvlinesize *  8, s->dest[2], s->uvlinesize,  8);
+        return s->mecc.sse[0](NULL, s->new_picture->data[0] + s->mb_x * 16 + s->mb_y * s->linesize * 16,
+                              s->dest[0], s->linesize, 16) +
+               s->mecc.sse[1](NULL, s->new_picture->data[1] + s->mb_x * chroma_mb_w + s->mb_y * s->uvlinesize * chroma_mb_h,
+                              s->dest[1], s->uvlinesize, chroma_mb_h) +
+               s->mecc.sse[1](NULL, s->new_picture->data[2] + s->mb_x * chroma_mb_w + s->mb_y * s->uvlinesize * chroma_mb_h,
+                              s->dest[2], s->uvlinesize, chroma_mb_h);
       }
     else
-        return  sse(s, s->new_picture->data[0] + s->mb_x*16 + s->mb_y*s->linesize*16, s->dest[0], w, h, s->linesize)
-               +sse(s, s->new_picture->data[1] + s->mb_x*8  + s->mb_y*s->uvlinesize*8,s->dest[1], w>>1, h>>1, s->uvlinesize)
-               +sse(s, s->new_picture->data[2] + s->mb_x*8  + s->mb_y*s->uvlinesize*8,s->dest[2], w>>1, h>>1, s->uvlinesize);
+        return  sse(s, s->new_picture->data[0] + s->mb_x * 16 + s->mb_y * s->linesize * 16,
+                    s->dest[0], w, h, s->linesize) +
+                sse(s, s->new_picture->data[1] + s->mb_x * chroma_mb_w + s->mb_y * s->uvlinesize * chroma_mb_h,
+                    s->dest[1], w >> s->chroma_x_shift, h >> s->chroma_y_shift, s->uvlinesize) +
+                sse(s, s->new_picture->data[2] + s->mb_x * chroma_mb_w + s->mb_y * s->uvlinesize * chroma_mb_h,
+                    s->dest[2], w >> s->chroma_x_shift, h >> s->chroma_y_shift, s->uvlinesize);
 }
 
 static int pre_estimate_motion_thread(AVCodecContext *c, void *arg){

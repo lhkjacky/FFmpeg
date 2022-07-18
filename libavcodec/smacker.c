@@ -371,8 +371,8 @@ static av_always_inline int smk_get_code(GetBitContext *gb, int *recode, int *la
     return v;
 }
 
-static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
-                        AVPacket *avpkt)
+static int decode_frame(AVCodecContext *avctx, AVFrame *rframe,
+                        int *got_frame, AVPacket *avpkt)
 {
     SmackVContext * const smk = avctx->priv_data;
     uint8_t *out;
@@ -518,7 +518,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
 
     }
 
-    if ((ret = av_frame_ref(data, smk->pic)) < 0)
+    if ((ret = av_frame_ref(rframe, smk->pic)) < 0)
         return ret;
 
     *got_frame = 1;
@@ -588,10 +588,9 @@ static av_cold int smka_decode_init(AVCodecContext *avctx)
 /**
  * Decode Smacker audio data
  */
-static int smka_decode_frame(AVCodecContext *avctx, void *data,
+static int smka_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                              int *got_frame_ptr, AVPacket *avpkt)
 {
-    AVFrame *frame     = data;
     const uint8_t *buf = avpkt->data;
     int buf_size = avpkt->size;
     GetBitContext gb;
@@ -602,7 +601,7 @@ static int smka_decode_frame(AVCodecContext *avctx, void *data,
     int i, res, ret;
     int unp_size;
     int bits, stereo;
-    unsigned pred[2], val;
+    unsigned pred[2], val, val2;
 
     if (buf_size <= 4) {
         av_log(avctx, AV_LOG_ERROR, "packet is too small\n");
@@ -673,24 +672,44 @@ static int smka_decode_frame(AVCodecContext *avctx, void *data,
             pred[i] = av_bswap16(get_bits(&gb, 16));
         for(i = 0; i <= stereo; i++)
             *samples++ = pred[i];
-        for(; i < unp_size / 2; i++) {
-            unsigned idx = 2 * (i & stereo);
-            if (get_bits_left(&gb) < 0) {
-                ret = AVERROR_INVALIDDATA;
-                goto error;
+        unp_size /= 2;
+
+        if (vlc[0       ].table || vlc[         1].table ||
+            vlc[2*stereo].table || vlc[2*stereo+1].table) {
+            for(; i < unp_size ; i++) {
+                unsigned idx = 2 * (i & stereo);
+                if (get_bits_left(&gb) < 0) {
+                    ret = AVERROR_INVALIDDATA;
+                    goto error;
+                }
+                if (vlc[idx].table)
+                    res = get_vlc2(&gb, vlc[idx].table, SMKTREE_BITS, 3);
+                else
+                    res = values[idx];
+                val  = res;
+                if (vlc[++idx].table)
+                    res = get_vlc2(&gb, vlc[idx].table, SMKTREE_BITS, 3);
+                else
+                    res = values[idx];
+                val |= res << 8;
+                pred[idx / 2] += val;
+                *samples++ = pred[idx / 2];
             }
-            if (vlc[idx].table)
-                res = get_vlc2(&gb, vlc[idx].table, SMKTREE_BITS, 3);
-            else
-                res = values[idx];
-            val  = res;
-            if (vlc[++idx].table)
-                res = get_vlc2(&gb, vlc[idx].table, SMKTREE_BITS, 3);
-            else
-                res = values[idx];
-            val |= res << 8;
-            pred[idx / 2] += val;
-            *samples++ = pred[idx / 2];
+        } else if (stereo) {
+            val  = 256*values[1] + values[0];
+            val2 = 256*values[3] + values[2];
+            for(; i < unp_size; i+=2) {
+                pred[0] += val;
+                pred[1] += val2;
+                *samples++ = pred[0];
+                *samples++ = pred[1];
+            }
+        } else {
+            val = 256*values[1] + values[0];
+            for(; i < unp_size; i++) {
+                pred[0] += val;
+                *samples++ = pred[0];
+            }
         }
     } else { //8-bit data
         for(i = stereo; i >= 0; i--)
@@ -731,7 +750,7 @@ const FFCodec ff_smacker_decoder = {
     .priv_data_size = sizeof(SmackVContext),
     .init           = decode_init,
     .close          = decode_end,
-    .decode         = decode_frame,
+    FF_CODEC_DECODE_CB(decode_frame),
     .p.capabilities = AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_INIT_THREADSAFE,
 };
@@ -742,7 +761,7 @@ const FFCodec ff_smackaud_decoder = {
     .p.type         = AVMEDIA_TYPE_AUDIO,
     .p.id           = AV_CODEC_ID_SMACKAUDIO,
     .init           = smka_decode_init,
-    .decode         = smka_decode_frame,
+    FF_CODEC_DECODE_CB(smka_decode_frame),
     .p.capabilities = AV_CODEC_CAP_DR1,
     .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };
