@@ -67,6 +67,9 @@ static const AVOption veai_fi_options[] = {
 
 AVFILTER_DEFINE_CLASS(veai_fi);
 
+static int filter_frame_fi(AVFilterLink *inlink, AVFrame *in);
+static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in);
+
 static av_cold int init(AVFilterContext *ctx) {
     VEAIFIContext *veai = ctx->priv;
     av_log(ctx, AV_LOG_DEBUG, "Init with params: %s %d %d %lf %d/%d = %lf\n", veai->model, veai->device, veai->extraThreads, veai->slowmo, veai->frame_rate.num, veai->frame_rate.den, av_q2d(veai->frame_rate));
