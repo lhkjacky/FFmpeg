@@ -108,11 +108,6 @@ static const enum AVPixelFormat pix_fmts[] = {
     AV_PIX_FMT_NONE
 };
 
-static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
-    AVFilterContext *ctx = inlink->dst;
-    VEAIFIContext *veai = ctx->priv;
-    return veai->isApollo ? filter_frame_fis(inlink, in) : filter_frame_fi(inlink, in);
-}
 
 static int filter_frame_fi(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
@@ -194,6 +189,13 @@ static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in) {
     av_frame_free(&in);
     veai->count++;
     return 0;
+}
+
+
+static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
+    AVFilterContext *ctx = inlink->dst;
+    VEAIFIContext *veai = ctx->priv;
+    return veai->isApollo ? filter_frame_fis(inlink, in) : filter_frame_fi(inlink, in);
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
