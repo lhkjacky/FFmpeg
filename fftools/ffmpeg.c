@@ -131,9 +131,9 @@ static BenchmarkTimeStamps get_benchmark_time_stamps(void);
 static int64_t getmaxrss(void);
 static int ifilter_has_all_input_formats(FilterGraph *fg);
 
-static int nb_frames_dup = 0;
-static unsigned dup_warning = 1000;
-static int nb_frames_drop = 0;
+static int64_t nb_frames_dup = 0;
+static uint64_t dup_warning = 1000;
+static int64_t nb_frames_drop = 0;
 static int64_t decode_error_stat[2];
 unsigned nb_output_dumped = 0;
 
@@ -765,7 +765,9 @@ static double adjust_frame_pts_to_encoder_tb(OutputFile *of, OutputStream *ost,
                                              AVFrame *frame)
 {
     double float_pts = AV_NOPTS_VALUE; // this is identical to frame.pts but with higher precision
+    int64_t orig_pts = AV_NOPTS_VALUE;
     AVCodecContext *enc = ost->enc_ctx;
+    AVRational filter_tb = (AVRational){ -1, -1 };
     if (!frame || frame->pts == AV_NOPTS_VALUE ||
         !enc || !ost->filter || !ost->filter->graph->graph)
         goto early_exit;
@@ -774,9 +776,10 @@ static double adjust_frame_pts_to_encoder_tb(OutputFile *of, OutputStream *ost,
         AVFilterContext *filter = ost->filter->filter;
 
         int64_t start_time = (of->start_time == AV_NOPTS_VALUE) ? 0 : of->start_time;
-        AVRational filter_tb = av_buffersink_get_time_base(filter);
         AVRational tb = enc->time_base;
         int extra_bits = av_clip(29 - av_log2(tb.den), 0, 16);
+        filter_tb = av_buffersink_get_time_base(filter);
+        orig_pts = frame->pts;
 
         tb.den <<= extra_bits;
         float_pts =
@@ -794,9 +797,14 @@ static double adjust_frame_pts_to_encoder_tb(OutputFile *of, OutputStream *ost,
 early_exit:
 
     if (debug_ts) {
+        av_log(NULL, AV_LOG_INFO, "filter_raw -> pts:%s pts_time:%s time_base:%d/%d\n",
+               frame ? av_ts2str(orig_pts) : "NULL",
+               frame ? av_ts2timestr(orig_pts, &filter_tb) : "NULL",
+               filter_tb.num, filter_tb.den);
+
         av_log(NULL, AV_LOG_INFO, "filter -> pts:%s pts_time:%s exact:%f time_base:%d/%d\n",
                frame ? av_ts2str(frame->pts) : "NULL",
-               frame ? av_ts2timestr(frame->pts, &enc->time_base) : "NULL",
+               (enc && frame) ? av_ts2timestr(frame->pts, &enc->time_base) : "NULL",
                float_pts,
                enc ? enc->time_base.num : -1,
                enc ? enc->time_base.den : -1);
@@ -839,7 +847,7 @@ static void update_video_stats(OutputStream *ost, const AVPacket *pkt, int write
     const uint8_t *sd = av_packet_get_side_data(pkt, AV_PKT_DATA_QUALITY_STATS,
                                                 NULL);
     AVCodecContext *enc = ost->enc_ctx;
-    int frame_number;
+    int64_t frame_number;
     double ti1, bitrate, avg_bitrate;
 
     ost->quality   = sd ? AV_RL32(sd) : -1;
@@ -866,10 +874,10 @@ static void update_video_stats(OutputStream *ost, const AVPacket *pkt, int write
 
     frame_number = ost->packets_encoded;
     if (vstats_version <= 1) {
-        fprintf(vstats_file, "frame= %5d q= %2.1f ", frame_number,
+        fprintf(vstats_file, "frame= %5"PRId64" q= %2.1f ", frame_number,
                 ost->quality / (float)FF_QP2LAMBDA);
     } else  {
-        fprintf(vstats_file, "out= %2d st= %2d frame= %5d q= %2.1f ", ost->file_index, ost->index, frame_number,
+        fprintf(vstats_file, "out= %2d st= %2d frame= %5"PRId64" q= %2.1f ", ost->file_index, ost->index, frame_number,
                 ost->quality / (float)FF_QP2LAMBDA);
     }
 
@@ -1082,7 +1090,7 @@ static void do_video_out(OutputFile *of,
     int ret;
     AVCodecContext *enc = ost->enc_ctx;
     AVRational frame_rate;
-    int nb_frames, nb0_frames, i;
+    int64_t nb_frames, nb0_frames, i;
     double delta, delta0;
     double duration = 0;
     double sync_ipts = AV_NOPTS_VALUE;
@@ -1152,7 +1160,7 @@ static void do_video_out(OutputFile *of,
             } else if (delta < -1.1)
                 nb_frames = 0;
             else if (delta > 1.1) {
-                nb_frames = lrintf(delta);
+                nb_frames = llrintf(delta);
                 if (delta0 > 1.1)
                     nb0_frames = llrintf(delta0 - 0.6);
             }
@@ -1188,19 +1196,19 @@ static void do_video_out(OutputFile *of,
     if (nb0_frames == 0 && ost->last_dropped) {
         nb_frames_drop++;
         av_log(NULL, AV_LOG_VERBOSE,
-               "*** dropping frame %d from stream %d at ts %"PRId64"\n",
+               "*** dropping frame %"PRId64" from stream %d at ts %"PRId64"\n",
                ost->frame_number, ost->st->index, ost->last_frame->pts);
     }
     if (nb_frames > (nb0_frames && ost->last_dropped) + (nb_frames > nb0_frames)) {
         if (nb_frames > dts_error_threshold * 30) {
-            av_log(NULL, AV_LOG_ERROR, "%d frame duplication too large, skipping\n", nb_frames - 1);
+            av_log(NULL, AV_LOG_ERROR, "%"PRId64" frame duplication too large, skipping\n", nb_frames - 1);
             nb_frames_drop++;
             return;
         }
         nb_frames_dup += nb_frames - (nb0_frames && ost->last_dropped) - (nb_frames > nb0_frames);
-        av_log(NULL, AV_LOG_VERBOSE, "*** %d dup!\n", nb_frames - 1);
+        av_log(NULL, AV_LOG_VERBOSE, "*** %"PRId64" dup!\n", nb_frames - 1);
         if (nb_frames_dup > dup_warning) {
-            av_log(NULL, AV_LOG_WARNING, "More than %d frames duplicated\n", dup_warning);
+            av_log(NULL, AV_LOG_WARNING, "More than %"PRIu64" frames duplicated\n", dup_warning);
             dup_warning *= 10;
         }
     }
@@ -1511,7 +1519,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     AVFormatContext *oc;
     int64_t total_size;
     AVCodecContext *enc;
-    int frame_number, vid, i;
+    int vid, i;
     double bitrate;
     double speed;
     int64_t pts = INT64_MIN + 1;
@@ -1562,12 +1570,12 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         }
         if (!vid && enc->codec_type == AVMEDIA_TYPE_VIDEO) {
             float fps;
+            int64_t frame_number = ost->frame_number;
 
-            frame_number = ost->frame_number;
             fps = t > 1 ? frame_number / t : 0;
-            av_bprintf(&buf, "frame=%5d fps=%3.*f q=%3.1f ",
+            av_bprintf(&buf, "frame=%5"PRId64" fps=%3.*f q=%3.1f ",
                      frame_number, fps < 9.95, fps, q);
-            av_bprintf(&buf_script, "frame=%d\n", frame_number);
+            av_bprintf(&buf_script, "frame=%"PRId64"\n", frame_number);
             av_bprintf(&buf_script, "fps=%.2f\n", fps);
             av_bprintf(&buf_script, "stream_%d_%d_q=%.1f\n",
                        ost->file_index, ost->index, q);
@@ -1671,9 +1679,9 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     }
 
     if (nb_frames_dup || nb_frames_drop)
-        av_bprintf(&buf, " dup=%d drop=%d", nb_frames_dup, nb_frames_drop);
-    av_bprintf(&buf_script, "dup_frames=%d\n", nb_frames_dup);
-    av_bprintf(&buf_script, "drop_frames=%d\n", nb_frames_drop);
+        av_bprintf(&buf, " dup=%"PRId64" drop=%"PRId64, nb_frames_dup, nb_frames_drop);
+    av_bprintf(&buf_script, "dup_frames=%"PRId64"\n", nb_frames_dup);
+    av_bprintf(&buf_script, "drop_frames=%"PRId64"\n", nb_frames_drop);
 
     if (speed < 0) {
         av_bprintf(&buf, " speed=N/A");

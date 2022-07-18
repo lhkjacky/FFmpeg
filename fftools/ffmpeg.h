@@ -118,6 +118,7 @@ typedef struct OptionsContext {
     float readrate;
     int accurate_seek;
     int thread_queue_size;
+    int input_sync_ref;
 
     SpecifierOpt *ts_scale;
     int        nb_ts_scale;
@@ -410,6 +411,7 @@ typedef struct InputFile {
                              at the moment when looping happens */
     AVRational time_base; /* time base of the duration */
     int64_t input_ts_offset;
+    int input_sync_ref;
 
     int64_t ts_offset;
     int64_t last_ts;
@@ -458,7 +460,7 @@ typedef struct OutputStream {
     int source_index;        /* InputStream index */
     AVStream *st;            /* stream in the output file */
     int encoding_needed;     /* true if encoding needed for this stream */
-    int frame_number;
+    int64_t frame_number;
     /* input pts and corresponding output pts
        for A/V sync */
     struct InputStream *sync_ist; /* input stream to sync against */
@@ -481,8 +483,8 @@ typedef struct OutputStream {
     AVFrame *filtered_frame;
     AVFrame *last_frame;
     AVPacket *pkt;
-    int last_dropped;
-    int last_nb0_frames[3];
+    int64_t last_dropped;
+    int64_t last_nb0_frames[3];
 
     void  *hwaccel_ctx;
 
