@@ -70,6 +70,7 @@ AVFILTER_DEFINE_CLASS(veai_fi);
 
 static int filter_frame_fi(AVFilterLink *inlink, AVFrame *in);
 static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in);
+int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx);
 
 static av_cold int init(AVFilterContext *ctx) {
     VEAIFIContext *veai = ctx->priv;
@@ -87,9 +88,6 @@ static int config_props(AVFilterLink *outlink) {
     VEAIFIContext *veai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
     float threshold = 0.05;
-    av_log(ctx, AV_LOG_DEBUG, "Set time base to %d/%d %lf -> %d/%d %lf\n", inlink->time_base.num, inlink->time_base.den, av_q2d(inlink->time_base), outlink->time_base.num, outlink->time_base.den, av_q2d(outlink->time_base));
-    av_log(ctx, AV_LOG_DEBUG, "Set frame rate to %lf -> %lf\n", av_q2d(inlink->frame_rate), av_q2d(outlink->frame_rate));
-    av_log(ctx, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", veai->fpsFactor, 1/veai->fpsFactor);
     if(veai->frame_rate.num > 0) {
         AVRational frFactor = av_div_q(veai->frame_rate, inlink->frame_rate);
         veai->fpsFactor = 1/(veai->slowmo*av_q2d(frFactor));
@@ -98,6 +96,9 @@ static int config_props(AVFilterLink *outlink) {
         outlink->frame_rate = inlink->frame_rate;
         veai->fpsFactor = 1/veai->slowmo;
     }
+    av_log(ctx, AV_LOG_DEBUG, "Set time base to %d/%d %lf -> %d/%d %lf\n", inlink->time_base.num, inlink->time_base.den, av_q2d(inlink->time_base), outlink->time_base.num, outlink->time_base.den, av_q2d(outlink->time_base));
+    av_log(ctx, AV_LOG_DEBUG, "Set frame rate to %lf -> %lf\n", av_q2d(inlink->frame_rate), av_q2d(outlink->frame_rate));
+    av_log(ctx, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", veai->fpsFactor, 1/veai->fpsFactor);
     threshold = veai->fpsFactor*0.3;
     float params[2] = {threshold, 1/veai->fpsFactor};
     veai->isApollo = strncmp(veai->model, (char*)"apo", 3) == 0;
@@ -202,28 +203,26 @@ static int request_frame(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     VEAIFIContext *veai = ctx->priv;
     int ret = ff_request_frame(ctx->inputs[0]);
-    if (ret == AVERROR_EOF) {
+    if (veai->isApollo && ret == AVERROR_EOF) {
         if(handlePostFlight(veai->pFrameProcessor, outlink, veai->previousFrame, ctx)) {
           av_log(NULL, AV_LOG_ERROR, "The postflight processing has failed");
           av_frame_free(&veai->previousFrame);
           return AVERROR(ENOSYS);
         }
-        av_frame_free(&veai->previousFrame);
+        // av_frame_free(&veai->previousFrame);
         av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", veai->model, veai->pFrameProcessor == NULL);
     }
     return ret;
 }
 
-
 int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
     VEAIFIContext *veai = ctx->priv;
     IOBuffer ioBuffer;
     float location = 0;
-    static int ocount = 0;
-
     veai_end_stream(pProcessor);
     int i, n = veai_queued_frames(pProcessor);
-    for(i=0; i<n; i++) {
+    static int ocount = 0;
+    for(int i=0; i<2; i++) {
         VEAIBuffer oBuffer;
         AVFrame *out = ff_veai_prepareBufferOutput(outlink, &oBuffer);
         if(pProcessor == NULL || out == NULL || veai_process_back(pProcessor, &oBuffer)) {
@@ -231,20 +230,6 @@ int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFil
             av_frame_free(&in);
             return AVERROR(ENOSYS);
         }
-        // av_frame_copy_props(out, in);
-        // location = veai->position - (veai->count - 2);
-        // out->pts = ((veai->currentPts - veai->previousPts)*location + veai->previousPts)*veai->slowmo;
-        // if(out->pts < 0) {
-        //   av_frame_free(&out);
-        //   av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
-        //   continue;
-        // }
-        // av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %lf\n", TS2T(oBuffer.timestamp, outlink->time_base));
-        // int code = ff_filter_frame(outlink, out);
-        // if(code) {
-        //   return code;
-        // }
-
         if (veai->count > 1) {
             while(veai->position < veai->count - 1) {
                 out = ff_veai_prepareBufferOutput(outlink, &ioBuffer.output);
@@ -268,14 +253,10 @@ int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFil
                 av_log(ctx, AV_LOG_DEBUG, "Added frame at pts %lld %lf %d\n", out->pts, av_q2d(outlink->time_base)*out->pts, ocount);
             }
         }
-        if(veai->previousFrame)
-        av_frame_free(&veai->previousFrame);
-        veai->previousFrame = in;
+        long long ptsDiff = veai->currentPts - veai->previousPts;
         veai->previousPts = veai->currentPts;
-        veai->currentPts = in->pts;
-        // av_frame_free(&in);
+        veai->currentPts += ptsDiff;
         veai->count++;
-
     }
     return 0;
 }
