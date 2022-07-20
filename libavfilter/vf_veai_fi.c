@@ -50,6 +50,8 @@ typedef struct  {
     long long previousPts;
     long long currentPts;
     int isApollo;
+    int stats;
+    int (*filterFunc)(AVFilterLink *, AVFrame *);
     AVFrame* previousFrame;
 } VEAIFIContext;
 
@@ -68,8 +70,8 @@ static const AVOption veai_fi_options[] = {
 
 AVFILTER_DEFINE_CLASS(veai_fi);
 
-static int filter_frame_fi(AVFilterLink *inlink, AVFrame *in);
-static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in);
+static int filter_frame_chronos(AVFilterLink *inlink, AVFrame *in);
+static int filter_frame_apollo(AVFilterLink *inlink, AVFrame *in);
 int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx);
 
 static av_cold int init(AVFilterContext *ctx) {
@@ -102,6 +104,7 @@ static int config_props(AVFilterLink *outlink) {
     threshold = veai->fpsFactor*0.3;
     float params[2] = {threshold, 1/veai->fpsFactor};
     veai->isApollo = strncmp(veai->model, (char*)"apo", 3) == 0;
+    veai->filterFunc = veai->isApollo ? filter_frame_apollo : filter_frame_chronos;
     veai->pFrameProcessor = ff_veai_verifyAndCreate(inlink, outlink, veai->isApollo ? (char*)"apo" : (char*)"chr", veai->model, ModelTypeFrameInterpolation, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 2, ctx);
     outlink->time_base = inlink->time_base;
     outlink->frame_rate = veai->frame_rate.num > 0 ? veai->frame_rate : inlink->frame_rate;
@@ -114,7 +117,7 @@ static const enum AVPixelFormat pix_fmts[] = {
     AV_PIX_FMT_NONE
 };
 
-static int filter_frame_fi(AVFilterLink *inlink, AVFrame *in) {
+static int filter_frame_chronos(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     VEAIFIContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
@@ -154,7 +157,7 @@ static int filter_frame_fi(AVFilterLink *inlink, AVFrame *in) {
 }
 
 
-static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in) {
+static int filter_frame_apollo(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     VEAIFIContext *veai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
@@ -261,9 +264,7 @@ int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFil
 }
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
-    AVFilterContext *ctx = inlink->dst;
-    VEAIFIContext *veai = ctx->priv;
-    return veai->isApollo ? filter_frame_fis(inlink, in) : filter_frame_fi(inlink, in);
+    return ((VEAIFIContext *)inlink->dst->priv)->filterFunc(inlink, in);
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
