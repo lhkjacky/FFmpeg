@@ -194,7 +194,6 @@ static int filter_frame_fis(AVFilterLink *inlink, AVFrame *in) {
     veai->previousFrame = in;
     veai->previousPts = veai->currentPts;
     veai->currentPts = in->pts;
-    // av_frame_free(&in);
     veai->count++;
     return 0;
 }
@@ -209,7 +208,7 @@ static int request_frame(AVFilterLink *outlink) {
           av_frame_free(&veai->previousFrame);
           return AVERROR(ENOSYS);
         }
-        // av_frame_free(&veai->previousFrame);
+        av_frame_free(&veai->previousFrame);
         av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", veai->model, veai->pFrameProcessor == NULL);
     }
     return ret;
@@ -220,9 +219,9 @@ int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFil
     IOBuffer ioBuffer;
     float location = 0;
     veai_end_stream(pProcessor);
-    int i, n = veai_queued_frames(pProcessor);
+    int i;
     static int ocount = 0;
-    for(int i=0; i<2; i++) {
+    for(i=0; i<2; i++) {
         VEAIBuffer oBuffer;
         AVFrame *out = ff_veai_prepareBufferOutput(outlink, &oBuffer);
         if(pProcessor == NULL || out == NULL || veai_process_back(pProcessor, &oBuffer)) {
