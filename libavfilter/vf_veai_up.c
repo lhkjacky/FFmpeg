@@ -89,7 +89,7 @@ static int config_props(AVFilterLink *outlink) {
     VideoProcessorInfo info;
     int scale = veai->scale;
     if(scale == 0) {
-      float x = veai->w/inlink->w, y = veai->h/inlink->h;
+      float x = veai->w*1.0f/inlink->w, y = veai->h*1.0f/inlink->h;
       float v = x > y ? x : y;
       scale = (v > 2.4) ? 4 : (v > 1.2 ? 2 : 1);
     }
