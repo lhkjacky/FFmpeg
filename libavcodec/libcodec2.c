@@ -130,13 +130,12 @@ static av_cold int libcodec2_close(AVCodecContext *avctx)
     return 0;
 }
 
-static int libcodec2_decode(AVCodecContext *avctx, void *data,
+static int libcodec2_decode(AVCodecContext *avctx, AVFrame *frame,
                             int *got_frame_ptr, AVPacket *pkt)
 {
     LibCodec2Context *c2 = avctx->priv_data;
-    AVFrame *frame = data;
     int ret, nframes, i;
-    uint8_t *input;
+    const uint8_t *input;
     int16_t *output;
 
     nframes           = pkt->size / avctx->block_align;
@@ -186,10 +185,11 @@ const FFCodec ff_libcodec2_decoder = {
     .p.supported_samplerates = (const int[]){ 8000, 0 },
     .p.sample_fmts          = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE },
     .p.ch_layouts           = (const AVChannelLayout[]) { AV_CHANNEL_LAYOUT_MONO, { 0 } },
+    .caps_internal          = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size         = sizeof(LibCodec2Context),
     .init                   = libcodec2_init_decoder,
     .close                  = libcodec2_close,
-    .decode                 = libcodec2_decode,
+    FF_CODEC_DECODE_CB(libcodec2_decode),
 #if FF_API_OLD_CHANNEL_LAYOUT
     .p.channel_layouts      = (const uint64_t[]) { AV_CH_LAYOUT_MONO, 0 },
 #endif
@@ -205,10 +205,11 @@ const FFCodec ff_libcodec2_encoder = {
     .p.sample_fmts          = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE },
     .p.ch_layouts           = (const AVChannelLayout[]) { AV_CHANNEL_LAYOUT_MONO, { 0 } },
     .p.priv_class           = &libcodec2_enc_class,
+    .caps_internal          = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size         = sizeof(LibCodec2Context),
     .init                   = libcodec2_init_encoder,
     .close                  = libcodec2_close,
-    .encode2                = libcodec2_encode,
+    FF_CODEC_ENCODE_CB(libcodec2_encode),
 #if FF_API_OLD_CHANNEL_LAYOUT
     .p.channel_layouts      = (const uint64_t[]) { AV_CH_LAYOUT_MONO, 0 },
 #endif

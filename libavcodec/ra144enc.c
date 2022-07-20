@@ -544,7 +544,7 @@ const FFCodec ff_ra_144_encoder = {
                       AV_CODEC_CAP_SMALL_LAST_FRAME,
     .priv_data_size = sizeof(RA144Context),
     .init           = ra144_encode_init,
-    .encode2        = ra144_encode_frame,
+    FF_CODEC_ENCODE_CB(ra144_encode_frame),
     .close          = ra144_encode_close,
     .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
                                                      AV_SAMPLE_FMT_NONE },
@@ -553,5 +553,4 @@ const FFCodec ff_ra_144_encoder = {
     .p.channel_layouts = (const uint64_t[]) { AV_CH_LAYOUT_MONO, 0 },
 #endif
     .p.ch_layouts   = (const AVChannelLayout[]){ AV_CHANNEL_LAYOUT_MONO, { 0 } },
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

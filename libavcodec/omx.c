@@ -943,11 +943,11 @@ const FFCodec ff_mpeg4_omx_encoder = {
     .p.id             = AV_CODEC_ID_MPEG4,
     .priv_data_size   = sizeof(OMXCodecContext),
     .init             = omx_encode_init,
-    .encode2          = omx_encode_frame,
+    FF_CODEC_ENCODE_CB(omx_encode_frame),
     .close            = omx_encode_end,
     .p.pix_fmts       = omx_encoder_pix_fmts,
     .p.capabilities   = AV_CODEC_CAP_DELAY,
-    .caps_internal    = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal    = FF_CODEC_CAP_INIT_CLEANUP,
     .p.priv_class     = &omx_mpeg4enc_class,
 };
 
@@ -964,10 +964,10 @@ const FFCodec ff_h264_omx_encoder = {
     .p.id             = AV_CODEC_ID_H264,
     .priv_data_size   = sizeof(OMXCodecContext),
     .init             = omx_encode_init,
-    .encode2          = omx_encode_frame,
+    FF_CODEC_ENCODE_CB(omx_encode_frame),
     .close            = omx_encode_end,
     .p.pix_fmts       = omx_encoder_pix_fmts,
     .p.capabilities   = AV_CODEC_CAP_DELAY,
-    .caps_internal    = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal    = FF_CODEC_CAP_INIT_CLEANUP,
     .p.priv_class     = &omx_h264enc_class,
 };

@@ -1215,11 +1215,10 @@ const FFCodec ff_dvvideo_encoder = {
                       AV_CODEC_CAP_SLICE_THREADS,
     .priv_data_size = sizeof(DVVideoContext),
     .init           = dvvideo_encode_init,
-    .encode2        = dvvideo_encode_frame,
+    FF_CODEC_ENCODE_CB(dvvideo_encode_frame),
     .p.pix_fmts     = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV411P, AV_PIX_FMT_YUV422P,
         AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE
     },
     .p.priv_class   = &dvvideo_encode_class,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

@@ -1007,9 +1007,9 @@ const FFCodec ff_ ## name_ ## _encoder = {                                 \
     .p.priv_class   = &adpcm_encoder_class,                                \
     .priv_data_size = sizeof(ADPCMEncodeContext),                          \
     .init           = adpcm_encode_init,                                   \
-    .encode2        = adpcm_encode_frame,                                  \
+    FF_CODEC_ENCODE_CB(adpcm_encode_frame),                                \
     .close          = adpcm_encode_close,                                  \
-    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP | FF_CODEC_CAP_INIT_THREADSAFE, \
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,                           \
 };
 #define ADPCM_ENCODER_2(enabled, codec_id, name, sample_fmts, capabilities, long_name) \
     ADPCM_ENCODER_ ## enabled(codec_id, name, sample_fmts, capabilities, long_name)

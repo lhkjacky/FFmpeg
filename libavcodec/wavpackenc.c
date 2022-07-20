@@ -2969,7 +2969,7 @@ const FFCodec ff_wavpack_encoder = {
     .priv_data_size = sizeof(WavPackEncodeContext),
     .p.priv_class   = &wavpack_encoder_class,
     .init           = wavpack_encode_init,
-    .encode2        = wavpack_encode_frame,
+    FF_CODEC_ENCODE_CB(wavpack_encode_frame),
     .close          = wavpack_encode_close,
     .p.capabilities = AV_CODEC_CAP_SMALL_LAST_FRAME,
     .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_U8P,
@@ -2977,5 +2977,4 @@ const FFCodec ff_wavpack_encoder = {
                                                      AV_SAMPLE_FMT_S32P,
                                                      AV_SAMPLE_FMT_FLTP,
                                                      AV_SAMPLE_FMT_NONE },
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

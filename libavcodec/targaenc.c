@@ -210,10 +210,9 @@ const FFCodec ff_targa_encoder = {
     .priv_data_size = sizeof(TargaContext),
     .p.priv_class   = &targa_class,
     .init           = targa_encode_init,
-    .encode2        = targa_encode_frame,
+    FF_CODEC_ENCODE_CB(targa_encode_frame),
     .p.pix_fmts     = (const enum AVPixelFormat[]){
         AV_PIX_FMT_BGR24, AV_PIX_FMT_BGRA, AV_PIX_FMT_RGB555LE, AV_PIX_FMT_GRAY8, AV_PIX_FMT_PAL8,
         AV_PIX_FMT_NONE
     },
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE,
 };

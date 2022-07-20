@@ -382,7 +382,8 @@ static int libdav1d_receive_frame(AVCodecContext *c, AVFrame *frame)
 
 #if FF_DAV1D_VERSION_AT_LEAST(5,1)
     dav1d_get_event_flags(dav1d->c, &event_flags);
-    if (event_flags & DAV1D_EVENT_FLAG_NEW_SEQUENCE)
+    if (c->pix_fmt == AV_PIX_FMT_NONE ||
+        event_flags & DAV1D_EVENT_FLAG_NEW_SEQUENCE)
 #endif
     libdav1d_init_params(c, p->seq_hdr);
     res = ff_decode_frame_props(c, frame);
@@ -414,7 +415,7 @@ static int libdav1d_receive_frame(AVCodecContext *c, AVFrame *frame)
     frame->pkt_dts = p->m.timestamp;
     frame->pkt_pos = p->m.offset;
     frame->pkt_size = p->m.size;
-    frame->pkt_duration = p->m.duration;
+    frame->duration = p->m.duration;
     frame->key_frame = p->frame_hdr->frame_type == DAV1D_FRAME_TYPE_KEY;
 
     switch (p->frame_hdr->frame_type) {
@@ -582,9 +583,9 @@ const FFCodec ff_libdav1d_decoder = {
     .init           = libdav1d_init,
     .close          = libdav1d_close,
     .flush          = libdav1d_flush,
-    .receive_frame  = libdav1d_receive_frame,
+    FF_CODEC_RECEIVE_FRAME_CB(libdav1d_receive_frame),
     .p.capabilities = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_OTHER_THREADS,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_SETS_PKT_DTS |
+    .caps_internal  = FF_CODEC_CAP_SETS_PKT_DTS |
                       FF_CODEC_CAP_AUTO_THREADS,
     .p.priv_class   = &libdav1d_class,
     .p.wrapper_name = "libdav1d",

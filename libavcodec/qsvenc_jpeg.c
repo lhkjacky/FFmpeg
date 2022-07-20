@@ -86,7 +86,7 @@ const FFCodec ff_mjpeg_qsv_encoder = {
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_MJPEG,
     .init           = qsv_enc_init,
-    .encode2        = qsv_enc_frame,
+    FF_CODEC_ENCODE_CB(qsv_enc_frame),
     .close          = qsv_enc_close,
     .p.capabilities = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_HYBRID,
     .p.pix_fmts     = (const enum AVPixelFormat[]){ AV_PIX_FMT_NV12,
@@ -96,4 +96,5 @@ const FFCodec ff_mjpeg_qsv_encoder = {
     .defaults       = qsv_enc_defaults,
     .p.wrapper_name = "qsv",
     .hw_configs     = ff_qsv_enc_hw_configs,
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
 };

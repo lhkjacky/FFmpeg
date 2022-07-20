@@ -104,10 +104,10 @@ const FFCodec ff_comfortnoise_encoder = {
     .p.capabilities = AV_CODEC_CAP_DR1,
     .priv_data_size = sizeof(CNGContext),
     .init           = cng_encode_init,
-    .encode2        = cng_encode_frame,
+    FF_CODEC_ENCODE_CB(cng_encode_frame),
     .close          = cng_encode_close,
     .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
                                                      AV_SAMPLE_FMT_NONE },
     .p.ch_layouts   = (const AVChannelLayout[]){ AV_CHANNEL_LAYOUT_MONO, { 0 } },
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
 };

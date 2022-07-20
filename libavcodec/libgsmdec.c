@@ -82,12 +82,11 @@ static av_cold int libgsm_decode_close(AVCodecContext *avctx) {
     return 0;
 }
 
-static int libgsm_decode_frame(AVCodecContext *avctx, void *data,
+static int libgsm_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                                int *got_frame_ptr, AVPacket *avpkt)
 {
     int i, ret;
     LibGSMDecodeContext *s = avctx->priv_data;
-    AVFrame *frame         = data;
     uint8_t *buf = avpkt->data;
     int buf_size = avpkt->size;
     int16_t *samples;
@@ -133,10 +132,11 @@ const FFCodec ff_libgsm_decoder = {
     .p.id           = AV_CODEC_ID_GSM,
     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
     .p.wrapper_name = "libgsm",
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size = sizeof(LibGSMDecodeContext),
     .init           = libgsm_decode_init,
     .close          = libgsm_decode_close,
-    .decode         = libgsm_decode_frame,
+    FF_CODEC_DECODE_CB(libgsm_decode_frame),
     .flush          = libgsm_flush,
 };
 #endif
@@ -148,10 +148,11 @@ const FFCodec ff_libgsm_ms_decoder = {
     .p.id           = AV_CODEC_ID_GSM_MS,
     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
     .p.wrapper_name = "libgsm",
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size = sizeof(LibGSMDecodeContext),
     .init           = libgsm_decode_init,
     .close          = libgsm_decode_close,
-    .decode         = libgsm_decode_frame,
+    FF_CODEC_DECODE_CB(libgsm_decode_frame),
     .flush          = libgsm_flush,
 };
 #endif

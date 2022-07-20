@@ -124,7 +124,7 @@ const FFCodec ff_libgsm_encoder = {
     .p.id           = AV_CODEC_ID_GSM,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .init           = libgsm_encode_init,
-    .encode2        = libgsm_encode_frame,
+    FF_CODEC_ENCODE_CB(libgsm_encode_frame),
     .close          = libgsm_encode_close,
     .defaults       = libgsm_defaults,
 #if FF_API_OLD_CHANNEL_LAYOUT
@@ -134,6 +134,7 @@ const FFCodec ff_libgsm_encoder = {
     .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
                                                      AV_SAMPLE_FMT_NONE },
     .p.wrapper_name = "libgsm",
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
 };
 #endif
 #if CONFIG_LIBGSM_MS_ENCODER
@@ -144,7 +145,7 @@ const FFCodec ff_libgsm_ms_encoder = {
     .p.id           = AV_CODEC_ID_GSM_MS,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .init           = libgsm_encode_init,
-    .encode2        = libgsm_encode_frame,
+    FF_CODEC_ENCODE_CB(libgsm_encode_frame),
     .close          = libgsm_encode_close,
     .defaults       = libgsm_defaults,
 #if FF_API_OLD_CHANNEL_LAYOUT
@@ -154,5 +155,6 @@ const FFCodec ff_libgsm_ms_encoder = {
     .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
                                                      AV_SAMPLE_FMT_NONE },
     .p.wrapper_name = "libgsm",
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
 };
 #endif

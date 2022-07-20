@@ -540,11 +540,12 @@ const FFCodec ff_ ## short_name ## _mediacodec_decoder = {                      
     .p.priv_class   = &ff_##short_name##_mediacodec_dec_class,                                 \
     .priv_data_size = sizeof(MediaCodecH264DecContext),                                        \
     .init           = mediacodec_decode_init,                                                  \
-    .receive_frame  = mediacodec_receive_frame,                                                \
+    FF_CODEC_RECEIVE_FRAME_CB(mediacodec_receive_frame),                                       \
     .flush          = mediacodec_decode_flush,                                                 \
     .close          = mediacodec_decode_close,                                                 \
     .p.capabilities = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_AVOID_PROBING | AV_CODEC_CAP_HARDWARE, \
-    .caps_internal  = FF_CODEC_CAP_SETS_PKT_DTS,                                               \
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE |                                       \
+                      FF_CODEC_CAP_SETS_PKT_DTS,                                               \
     .bsfs           = bsf,                                                                     \
     .hw_configs     = mediacodec_hw_configs,                                                   \
     .p.wrapper_name = "mediacodec",                                                            \

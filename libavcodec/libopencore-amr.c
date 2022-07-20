@@ -96,10 +96,9 @@ static av_cold int amr_nb_decode_close(AVCodecContext *avctx)
     return 0;
 }
 
-static int amr_nb_decode_frame(AVCodecContext *avctx, void *data,
+static int amr_nb_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                                int *got_frame_ptr, AVPacket *avpkt)
 {
-    AVFrame *frame     = data;
     const uint8_t *buf = avpkt->data;
     int buf_size       = avpkt->size;
     AMRContext *s      = avctx->priv_data;
@@ -139,10 +138,11 @@ const FFCodec ff_libopencore_amrnb_decoder = {
     .p.long_name    = NULL_IF_CONFIG_SMALL("OpenCORE AMR-NB (Adaptive Multi-Rate Narrow-Band)"),
     .p.type         = AVMEDIA_TYPE_AUDIO,
     .p.id           = AV_CODEC_ID_AMR_NB,
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size = sizeof(AMRContext),
     .init           = amr_nb_decode_init,
     .close          = amr_nb_decode_close,
-    .decode         = amr_nb_decode_frame,
+    FF_CODEC_DECODE_CB(amr_nb_decode_frame),
     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
 };
 #endif /* CONFIG_LIBOPENCORE_AMRNB_DECODER */
@@ -294,9 +294,10 @@ const FFCodec ff_libopencore_amrnb_encoder = {
     .p.long_name    = NULL_IF_CONFIG_SMALL("OpenCORE AMR-NB (Adaptive Multi-Rate Narrow-Band)"),
     .p.type         = AVMEDIA_TYPE_AUDIO,
     .p.id           = AV_CODEC_ID_AMR_NB,
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size = sizeof(AMRContext),
     .init           = amr_nb_encode_init,
-    .encode2        = amr_nb_encode_frame,
+    FF_CODEC_ENCODE_CB(amr_nb_encode_frame),
     .close          = amr_nb_encode_close,
     .p.capabilities = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_SMALL_LAST_FRAME,
     .p.sample_fmts  = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16,
@@ -330,10 +331,9 @@ static av_cold int amr_wb_decode_init(AVCodecContext *avctx)
     return 0;
 }
 
-static int amr_wb_decode_frame(AVCodecContext *avctx, void *data,
+static int amr_wb_decode_frame(AVCodecContext *avctx, AVFrame *frame,
                                int *got_frame_ptr, AVPacket *avpkt)
 {
-    AVFrame *frame     = data;
     const uint8_t *buf = avpkt->data;
     int buf_size       = avpkt->size;
     AMRWBContext *s    = avctx->priv_data;
@@ -381,10 +381,11 @@ const FFCodec ff_libopencore_amrwb_decoder = {
     .p.id           = AV_CODEC_ID_AMR_WB,
     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_CHANNEL_CONF,
     .p.wrapper_name = "libopencore_amrwb",
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size = sizeof(AMRWBContext),
     .init           = amr_wb_decode_init,
     .close          = amr_wb_decode_close,
-    .decode         = amr_wb_decode_frame,
+    FF_CODEC_DECODE_CB(amr_wb_decode_frame),
 };
 
 #endif /* CONFIG_LIBOPENCORE_AMRWB_DECODER */

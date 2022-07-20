@@ -1056,7 +1056,7 @@ const FFCodec ff_huffyuv_encoder = {
     .p.id           = AV_CODEC_ID_HUFFYUV,
     .priv_data_size = sizeof(HYuvContext),
     .init           = encode_init,
-    .encode2        = encode_frame,
+    FF_CODEC_ENCODE_CB(encode_frame),
     .close          = encode_end,
     .p.capabilities = AV_CODEC_CAP_FRAME_THREADS,
     .p.priv_class   = &normal_class,
@@ -1064,8 +1064,7 @@ const FFCodec ff_huffyuv_encoder = {
         AV_PIX_FMT_YUV422P, AV_PIX_FMT_RGB24,
         AV_PIX_FMT_RGB32, AV_PIX_FMT_NONE
     },
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
-                      FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
 };
 
 #if CONFIG_FFVHUFF_ENCODER
@@ -1076,7 +1075,7 @@ const FFCodec ff_ffvhuff_encoder = {
     .p.id           = AV_CODEC_ID_FFVHUFF,
     .priv_data_size = sizeof(HYuvContext),
     .init           = encode_init,
-    .encode2        = encode_frame,
+    FF_CODEC_ENCODE_CB(encode_frame),
     .close          = encode_end,
     .p.capabilities = AV_CODEC_CAP_FRAME_THREADS,
     .p.priv_class   = &ff_class,
@@ -1097,7 +1096,6 @@ const FFCodec ff_ffvhuff_encoder = {
         AV_PIX_FMT_RGB24,
         AV_PIX_FMT_RGB32, AV_PIX_FMT_NONE
     },
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
-                      FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
 };
 #endif

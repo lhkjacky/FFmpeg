@@ -335,9 +335,10 @@ const FFCodec ff_libmp3lame_encoder = {
     .p.id                  = AV_CODEC_ID_MP3,
     .p.capabilities        = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_DELAY |
                              AV_CODEC_CAP_SMALL_LAST_FRAME,
+    .caps_internal         = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size        = sizeof(LAMEContext),
     .init                  = mp3lame_encode_init,
-    .encode2               = mp3lame_encode_frame,
+    FF_CODEC_ENCODE_CB(mp3lame_encode_frame),
     .close                 = mp3lame_encode_close,
     .p.sample_fmts         = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S32P,
                                                              AV_SAMPLE_FMT_FLTP,

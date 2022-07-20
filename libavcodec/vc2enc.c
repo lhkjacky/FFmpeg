@@ -1230,11 +1230,11 @@ const FFCodec ff_vc2_encoder = {
     .p.type         = AVMEDIA_TYPE_VIDEO,
     .p.id           = AV_CODEC_ID_DIRAC,
     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_SLICE_THREADS,
-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
     .priv_data_size = sizeof(VC2EncContext),
     .init           = vc2_encode_init,
     .close          = vc2_encode_end,
-    .encode2        = vc2_encode_frame,
+    FF_CODEC_ENCODE_CB(vc2_encode_frame),
     .p.priv_class   = &vc2enc_class,
     .defaults       = vc2enc_defaults,
     .p.pix_fmts     = allowed_pix_fmts

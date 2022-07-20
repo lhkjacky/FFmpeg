@@ -103,11 +103,10 @@ static av_cold int libcelt_dec_close(AVCodecContext *c)
     return 0;
 }
 
-static int libcelt_dec_decode(AVCodecContext *c, void *data,
+static int libcelt_dec_decode(AVCodecContext *c, AVFrame *frame,
                               int *got_frame_ptr, AVPacket *pkt)
 {
     struct libcelt_context *celt = c->priv_data;
-    AVFrame *frame = data;
     int err;
     int16_t *pcm;
 
@@ -135,8 +134,9 @@ const FFCodec ff_libcelt_decoder = {
     .p.id           = AV_CODEC_ID_CELT,
     .p.capabilities = AV_CODEC_CAP_DR1,
     .p.wrapper_name = "libcelt",
+    .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE,
     .priv_data_size = sizeof(struct libcelt_context),
     .init           = libcelt_dec_init,
     .close          = libcelt_dec_close,
-    .decode         = libcelt_dec_decode,
+    FF_CODEC_DECODE_CB(libcelt_dec_decode),
 };
