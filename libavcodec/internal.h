@@ -33,6 +33,10 @@
 #include "avcodec.h"
 #include "config.h"
 
+#if CONFIG_LCMS2
+# include "fflcms2.h"
+#endif
+
 #define FF_SANE_NB_CHANNELS 512U
 
 #if HAVE_SIMD_ALIGN_64
@@ -133,8 +137,6 @@ typedef struct AVCodecInternal {
 
     int showed_multi_packet_warning;
 
-    int skip_samples_multiplier;
-
     /* to prevent infinite loop on errors when draining */
     int nb_draining_errors;
 
@@ -148,6 +150,10 @@ typedef struct AVCodecInternal {
     uint64_t initial_channel_layout;
 #endif
     AVChannelLayout initial_ch_layout;
+
+#if CONFIG_LCMS2
+    FFIccContext icc; /* used to read and write embedded ICC profiles */
+#endif
 } AVCodecInternal;
 
 /**
