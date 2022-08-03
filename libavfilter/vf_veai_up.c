@@ -57,7 +57,7 @@ static const AVOption veai_up_options[] = {
     { "w",  "Estimate scale based on output width",  OFFSET(w),  AV_OPT_TYPE_INT, {.i64=0}, 0, 100000, FLAGS, "w" },
     { "h",  "Estimate scale based on output height",  OFFSET(h),  AV_OPT_TYPE_INT, {.i64=0}, 0, 100000, FLAGS, "h" },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
-    { "threads",  "Number of extra threads to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "extraThreads" },
+    { "instances",  "Number of extra model instances to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "instances" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
     { "vram", "Max memory usage", OFFSET(vram), AV_OPT_TYPE_DOUBLE, {.dbl=1.0}, 0.1, 1, .flags = FLAGS, "vram"},
     { "estimate",  "Number of frames for auto parameter estimation, 0 to disable auto parameter estimation",  OFFSET(estimateFrameCount),  AV_OPT_TYPE_INT, {.i64=0}, 0, 1000000, FLAGS, "estimateParamNthFrame" },
@@ -89,11 +89,13 @@ static int config_props(AVFilterLink *outlink) {
     VideoProcessorInfo info;
     int scale = veai->scale;
     if(scale == 0) {
-      float x = veai->w*1.0f/inlink->w, y = veai->h*1.0f/inlink->h;
+      float x = veai->w/(av_q2d(inlink->sample_aspect_ratio)*inlink->w), y = veai->h*1.0f/inlink->h;
       float v = x > y ? x : y;
       scale = (v > 2.4) ? 4 : (v > 1.2 ? 2 : 1);
+      av_log(ctx, AV_LOG_VERBOSE, "SAR: %lf scale: %d x: %f y: %f v: %f\n", av_q2d(inlink->sample_aspect_ratio), scale, x, y, v);
     }
     info.frameCount = veai->estimateFrameCount;
+    av_log(ctx, AV_LOG_VERBOSE, "Here init with perf options: model: %s scale: %d device: %d vram: %lf threads: %d downloads: %d\n", veai->model, veai->scale, veai->device,veai->vram, veai->extraThreads, veai->canDownloadModels);
     if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (veai->estimateFrameCount > 0) ? (char*)"ad" : (char*)"up", veai->model, ModelTypeUpscaling, veai->device, veai->extraThreads, veai->vram,
                                                     scale, veai->canDownloadModels, parameter_values, 6, ctx)) {
       return AVERROR(EINVAL);
