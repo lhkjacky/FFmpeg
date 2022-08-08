@@ -88,11 +88,12 @@ static int config_props(AVFilterLink *outlink) {
     float parameter_values[6] = {veai->preBlur, veai->noise, veai->details, veai->halo, veai->blur, veai->compression};
     VideoProcessorInfo info;
     int scale = veai->scale;
+    double sar = av_q2d(inlink->sample_aspect_ratio) > 0 ? av_q2d(inlink->sample_aspect_ratio) : 1;
     if(scale == 0) {
-      float x = veai->w/(av_q2d(inlink->sample_aspect_ratio)*inlink->w), y = veai->h*1.0f/inlink->h;
+      float x = veai->w/(sar*inlink->w), y = veai->h*1.0f/inlink->h;
       float v = x > y ? x : y;
       scale = (v > 2.4) ? 4 : (v > 1.2 ? 2 : 1);
-      av_log(ctx, AV_LOG_VERBOSE, "SAR: %lf scale: %d x: %f y: %f v: %f\n", av_q2d(inlink->sample_aspect_ratio), scale, x, y, v);
+      av_log(ctx, AV_LOG_VERBOSE, "SAR: %lf scale: %d x: %f y: %f v: %f\n", sar, scale, x, y, v);
     }
     info.frameCount = veai->estimateFrameCount;
     av_log(ctx, AV_LOG_VERBOSE, "Here init with perf options: model: %s scale: %d device: %d vram: %lf threads: %d downloads: %d\n", veai->model, veai->scale, veai->device,veai->vram, veai->extraThreads, veai->canDownloadModels);
