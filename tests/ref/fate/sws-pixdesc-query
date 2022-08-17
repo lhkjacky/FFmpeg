@@ -21,6 +21,8 @@ is16BPS:
   rgb48le
   rgba64be
   rgba64le
+  rgbaf16be
+  rgbaf16le
   ya16be
   ya16le
   yuv420p16be
@@ -157,6 +159,7 @@ isBE:
   rgb555be
   rgb565be
   rgba64be
+  rgbaf16be
   x2bgr10be
   x2rgb10be
   xyz12be
@@ -215,6 +218,7 @@ isYUV:
   p416le
   uyvy422
   uyyvyy411
+  vuya
   xyz12be
   xyz12le
   y210be
@@ -478,6 +482,8 @@ isRGB:
   rgb8
   rgba64be
   rgba64le
+  rgbaf16be
+  rgbaf16le
   x2bgr10be
   x2bgr10le
   x2rgb10be
@@ -628,6 +634,8 @@ AnyRGB:
   rgb8
   rgba64be
   rgba64le
+  rgbaf16be
+  rgbaf16le
   x2bgr10be
   x2bgr10le
   x2rgb10be
@@ -654,6 +662,9 @@ ALPHA:
   rgb32_1
   rgba64be
   rgba64le
+  rgbaf16be
+  rgbaf16le
+  vuya
   ya16be
   ya16le
   ya8
@@ -737,8 +748,11 @@ Packed:
   rgb8
   rgba64be
   rgba64le
+  rgbaf16be
+  rgbaf16le
   uyvy422
   uyyvyy411
+  vuya
   x2bgr10be
   x2bgr10le
   x2rgb10be
@@ -915,6 +929,8 @@ PackedRGB:
   rgb8
   rgba64be
   rgba64le
+  rgbaf16be
+  rgbaf16le
   x2bgr10be
   x2bgr10le
   x2rgb10be
@@ -967,5 +983,6 @@ DataInHighBits:
 SwappedChroma:
   nv21
   nv42
+  vuya
   yvyu422
 

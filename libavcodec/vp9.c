@@ -234,6 +234,11 @@ static int update_size(AVCodecContext *avctx, int w, int h)
             *fmtp++ = AV_PIX_FMT_VDPAU;
 #endif
             break;
+        case AV_PIX_FMT_YUV444P:
+#if CONFIG_VP9_VAAPI_HWACCEL
+            *fmtp++ = AV_PIX_FMT_VAAPI;
+#endif
+            break;
         }
 
         *fmtp++ = s->pix_fmt;
@@ -1288,17 +1293,13 @@ static int decode_tiles(AVCodecContext *avctx,
                 data += 4;
                 size -= 4;
             }
-            if (tile_size > size) {
-                ff_thread_report_progress(&s->s.frames[CUR_FRAME].tf, INT_MAX, 0);
+            if (tile_size > size)
                 return AVERROR_INVALIDDATA;
-            }
             ret = ff_vpx_init_range_decoder(&td->c_b[tile_col], data, tile_size);
             if (ret < 0)
                 return ret;
-            if (vpx_rac_get_prob_branchy(&td->c_b[tile_col], 128)) { // marker bit
-                ff_thread_report_progress(&s->s.frames[CUR_FRAME].tf, INT_MAX, 0);
+            if (vpx_rac_get_prob_branchy(&td->c_b[tile_col], 128)) // marker bit
                 return AVERROR_INVALIDDATA;
-            }
             data += tile_size;
             size -= tile_size;
         }
