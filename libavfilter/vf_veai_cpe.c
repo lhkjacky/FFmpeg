@@ -71,6 +71,8 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterLink *inlink = ctx->inputs[0];
     VideoProcessorInfo info;
     info.options[0] = veai->filename;
+    veai->rsc = strncmp(veai->model, (char*)"cpe-1", 5) != 0;
+    av_log(ctx, AV_LOG_DEBUG, "RSC: %d\n", veai->rsc);
     if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (char*)"cpe", veai->model, ModelTypeCamPoseEstimation, veai->device, 0, 1, 1, veai->canDownloadModels, &veai->rsc, 1, ctx)) {
       return AVERROR(EINVAL);
     }
@@ -90,9 +92,9 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     IOBuffer ioBuffer;
     ff_veai_prepareIOBufferInput(&ioBuffer, in, FrameTypeNormal, veai->counter==0);
 
-    float transform[4] = {0,0,0,0};
+    float transform[6] = {0,0,0,0,0,0};
     ioBuffer.output.pBuffer = (unsigned char *)transform;
-    ioBuffer.output.lineSize = sizeof(float)*4;
+    ioBuffer.output.lineSize = sizeof(float)*6;
 
     if(veai->pFrameProcessor == NULL || veai_process(veai->pFrameProcessor,  &ioBuffer)) {
         av_log(ctx, AV_LOG_ERROR, "The processing has failed");
@@ -111,9 +113,9 @@ static int request_frame(AVFilterLink *outlink) {
         int i, n = veai_remaining_frames(veai->pFrameProcessor);
         for(i=0;i<n;i++) {
             VEAIBuffer oBuffer;
-            float transform[4] = {0,0,0,0};
+            float transform[6] = {0,0,0,0,0,0};
             oBuffer.pBuffer = (unsigned char *)transform;
-            oBuffer.lineSize = sizeof(float)*4;
+            oBuffer.lineSize = sizeof(float)*6;
             if(veai->pFrameProcessor == NULL || veai_process_back(veai->pFrameProcessor, &oBuffer)) {
                 av_log(ctx, AV_LOG_ERROR, "The post flight processing has failed");
                 return AVERROR(ENOSYS);
