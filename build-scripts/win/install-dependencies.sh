@@ -35,9 +35,9 @@ if [[ `which link` =~ "usr/bin" ]]; then
 fi
 
 # Path must contain the Windows SDK for this to work
-wget https://zlib.net/zlib-1.2.11.tar.gz
-tar xvf zlib-1.2.11.tar.gz
-cd zlib-1.2.11
+wget https://zlib.net/zlib-1.2.12.tar.gz
+tar xvf zlib-1.2.12.tar.gz
+cd zlib-1.2.12
 sed -i.bak 's/-MD/-MT/g' win32/Makefile.msc
 sed -i.bak '/unistd.h/d' zconf.h
 nmake -f win32/Makefile.msc
