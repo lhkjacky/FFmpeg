@@ -45,7 +45,7 @@ typedef struct VEAIStbContext {
     double vram;
     void* pFrameProcessor;
     double smoothness;
-    int postFlight, windowSize, cacheSize, stabDOF, enableRSC, enableFullFrame;
+    int postFlight, windowSize, cacheSize, stabDOF, enableRSC, enableFullFrame, reduceMotion;
     double readStartTime, writeStartTime, canvasScaleX, canvasScaleY;
     AVFrame* previousFrame;
 } VEAIStbContext;
@@ -70,7 +70,7 @@ static const AVOption veai_stb_options[] = {
     { "cache", "Set memory cache size", OFFSET(cacheSize), AV_OPT_TYPE_INT, {.i64=128}, 0, 256, .flags = FLAGS, "cache" },
     { "dof", "Enable/Disable stabilization of different motions - rotation (1st digit), horizontal pan (2nd), vertical pan (3rd), scale/zoom (4th digit). Non-zero digit enables corresponding motions", OFFSET(stabDOF), AV_OPT_TYPE_INT, {.i64=1111}, 0, 1111, .flags = FLAGS, "dof" },
     { "roll", "Enable rolling shutter correction", OFFSET(enableRSC), AV_OPT_TYPE_INT, {.i64=0}, 0, 1, .flags = FLAGS, "roll" },
-
+    { "reduce", "Reduce motion jitters", OFFSET(reduceMotion), AV_OPT_TYPE_INT, {.i64=0}, 0, 5, .flags = FLAGS, "reduce" },
     { NULL }
 };
 
@@ -91,8 +91,8 @@ static int config_props(AVFilterLink *outlink) {
   info.options[0] = veai->filename;
   info.options[1] = veai->filler;
   float smoothness = veai->smoothness;
-  float params[10] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY, veai->cacheSize, veai->stabDOF, veai->enableRSC, veai->readStartTime, veai->writeStartTime};
-  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (veai->enableFullFrame > 0) ? (char*)"st" : (char*)"stx", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 10, ctx)) {
+  float params[11] = {veai->smoothness, veai->windowSize, veai->postFlight, veai->canvasScaleX, veai->canvasScaleY, veai->cacheSize, veai->stabDOF, veai->enableRSC, veai->readStartTime, veai->writeStartTime, veai->reduceMotion};
+  if(ff_veai_verifyAndSetInfo(&info, inlink, outlink, (veai->enableFullFrame > 0) ? (char*)"st" : (char*)"stx", veai->model, ModelTypeStabilization, veai->device, veai->extraThreads, veai->vram, 1, veai->canDownloadModels, params, 11, ctx)) {
     return AVERROR(EINVAL);
   }
   veai->pFrameProcessor = veai_create(&info);
