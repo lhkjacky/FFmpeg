@@ -463,6 +463,7 @@ Optimization options (experts only):
   --disable-mmi            disable Loongson MMI optimizations
   --disable-lsx            disable Loongson LSX optimizations
   --disable-lasx           disable Loongson LASX optimizations
+  --disable-rvv            disable RISC-V Vector optimizations
   --disable-fast-unaligned consider unaligned accesses slow
 
 Developer options (useful when working on FFmpeg itself):
@@ -2128,6 +2129,10 @@ ARCH_EXT_LIST_PPC="
     vsx
 "
 
+ARCH_EXT_LIST_RISCV="
+    rvv
+"
+
 ARCH_EXT_LIST_X86="
     $ARCH_EXT_LIST_X86_SIMD
     cpunop
@@ -2137,6 +2142,7 @@ ARCH_EXT_LIST_X86="
 ARCH_EXT_LIST="
     $ARCH_EXT_LIST_ARM
     $ARCH_EXT_LIST_PPC
+    $ARCH_EXT_LIST_RISCV
     $ARCH_EXT_LIST_X86
     $ARCH_EXT_LIST_MIPS
     $ARCH_EXT_LIST_LOONGSON
@@ -2147,6 +2153,7 @@ ARCH_FEATURES="
     fast_64bit
     fast_clz
     fast_cmov
+    fast_float16
     local_aligned
     simd_align_16
     simd_align_32
@@ -2643,6 +2650,8 @@ ppc4xx_deps="ppc"
 vsx_deps="altivec"
 power8_deps="vsx"
 
+rvv_deps="riscv"
+
 loongson2_deps="mips"
 loongson3_deps="mips"
 mmi_deps_any="loongson2 loongson3"
@@ -2776,9 +2785,7 @@ amv_encoder_select="jpegtables mpegvideoenc"
 ape_decoder_select="bswapdsp llauddsp"
 apng_decoder_select="inflate_wrapper"
 apng_encoder_select="deflate_wrapper llvidencdsp"
-aptx_decoder_select="audio_frame_queue"
 aptx_encoder_select="audio_frame_queue"
-aptx_hd_decoder_select="audio_frame_queue"
 aptx_hd_encoder_select="audio_frame_queue"
 asv1_decoder_select="blockdsp bswapdsp idctdsp"
 asv1_encoder_select="aandcttables bswapdsp fdctdsp pixblockdsp"
@@ -2790,7 +2797,7 @@ atrac3al_decoder_select="mdct"
 atrac3p_decoder_select="mdct sinewin"
 atrac3pal_decoder_select="mdct sinewin"
 atrac9_decoder_select="mdct"
-av1_decoder_select="cbs_av1"
+av1_decoder_select="av1_frame_split_bsf cbs_av1"
 bink_decoder_select="blockdsp hpeldsp"
 binkaudio_dct_decoder_select="mdct rdft dct sinewin wma_freqs"
 binkaudio_rdft_decoder_select="mdct rdft sinewin wma_freqs"
@@ -2814,7 +2821,7 @@ dxa_decoder_deps="zlib"
 dxv_decoder_select="lzf texturedsp"
 eac3_decoder_select="ac3_decoder"
 eac3_encoder_select="ac3_encoder"
-eamad_decoder_select="aandcttables blockdsp bswapdsp idctdsp mpegvideo"
+eamad_decoder_select="aandcttables blockdsp bswapdsp idctdsp"
 eatgq_decoder_select="aandcttables"
 eatqi_decoder_select="aandcttables blockdsp bswapdsp idctdsp"
 exr_decoder_deps="zlib"
@@ -2868,7 +2875,7 @@ ljpeg_encoder_select="idctdsp jpegtables"
 lscr_decoder_select="inflate_wrapper"
 magicyuv_decoder_select="llviddsp"
 magicyuv_encoder_select="llvidencdsp"
-mdec_decoder_select="blockdsp bswapdsp idctdsp mpegvideo"
+mdec_decoder_select="blockdsp bswapdsp idctdsp"
 metasound_decoder_select="lsp mdct sinewin"
 mimic_decoder_select="blockdsp bswapdsp hpeldsp idctdsp"
 mjpeg_decoder_select="blockdsp hpeldsp exif idctdsp jpegtables"
@@ -2916,8 +2923,7 @@ notchlc_decoder_select="lzf"
 nuv_decoder_select="idctdsp"
 on2avc_decoder_select="mdct"
 opus_decoder_deps="swresample"
-opus_decoder_select="mdct15"
-opus_encoder_select="audio_frame_queue mdct15"
+opus_encoder_select="audio_frame_queue"
 png_decoder_select="inflate_wrapper"
 png_encoder_select="deflate_wrapper llvidencdsp"
 prores_decoder_select="blockdsp idctdsp"
@@ -2947,7 +2953,7 @@ sonic_decoder_select="golomb rangecoder"
 sonic_encoder_select="golomb rangecoder"
 sonic_ls_encoder_select="golomb rangecoder"
 sp5x_decoder_select="mjpeg_decoder"
-speedhq_decoder_select="mpegvideo"
+speedhq_decoder_select="blockdsp idctdsp"
 speedhq_encoder_select="mpegvideoenc"
 srgc_decoder_select="inflate_wrapper"
 svq1_decoder_select="hpeldsp"
@@ -3150,8 +3156,12 @@ qsvvpp_select="qsv"
 vaapi_encode_deps="vaapi"
 v4l2_m2m_deps="linux_videodev2_h sem_timedwait"
 
+bilateral_cuda_filter_deps="ffnvcodec"
+bilateral_cuda_filter_deps_any="cuda_nvcc cuda_llvm"
 chromakey_cuda_filter_deps="ffnvcodec"
 chromakey_cuda_filter_deps_any="cuda_nvcc cuda_llvm"
+colorspace_cuda_filter_deps="ffnvcodec"
+colorspace_cuda_filter_deps_any="cuda_nvcc cuda_llvm"
 hwupload_cuda_filter_deps="ffnvcodec"
 scale_npp_filter_deps="ffnvcodec libnpp"
 scale2ref_npp_filter_deps="ffnvcodec libnpp"
@@ -3267,7 +3277,6 @@ av1_parser_select="cbs_av1"
 h264_parser_select="atsc_a53 golomb h264dsp h264parse"
 hevc_parser_select="hevcparse"
 mpegaudio_parser_select="mpegaudioheader"
-mpegvideo_parser_select="mpegvideo"
 mpeg4video_parser_select="h263dsp mpegvideodec qpeldsp"
 vc1_parser_select="vc1dsp"
 
@@ -3276,6 +3285,7 @@ aac_adtstoasc_bsf_select="adts_header mpeg4audio"
 av1_frame_merge_bsf_select="cbs_av1"
 av1_frame_split_bsf_select="cbs_av1"
 av1_metadata_bsf_select="cbs_av1"
+dts2pts_bsf_select="cbs_h264 h264parse"
 eac3_core_bsf_select="ac3_parser"
 filter_units_bsf_select="cbs"
 h264_metadata_bsf_deps="const_nan"
@@ -3531,6 +3541,7 @@ gdigrab_indev_deps="CreateDIBSection"
 gdigrab_indev_extralibs="-lgdi32"
 gdigrab_indev_select="bmp_decoder"
 iec61883_indev_deps="libiec61883"
+iec61883_indev_select="dv_demuxer"
 jack_indev_deps="libjack"
 jack_indev_deps_any="sem_timedwait dispatch_dispatch_h"
 kmsgrab_indev_deps="libdrm"
@@ -5139,6 +5150,8 @@ elif enabled arm; then
             ;;
     esac
 
+    test_cflags -mfp16-format=ieee && add_cflags -mfp16-format=ieee
+
 elif enabled avr32; then
 
     case $cpu in
@@ -5339,6 +5352,12 @@ elif enabled ppc; then
             disable dcbzl
         ;;
     esac
+
+elif enabled riscv; then
+
+    if test_cpp_condition stddef.h "__riscv_zbb"; then
+        enable fast_clz
+    fi
 
 elif enabled sparc; then
 
@@ -6110,6 +6129,10 @@ elif enabled ppc; then
         check_cpp_condition power8 "altivec.h" "defined(_ARCH_PWR8)"
     fi
 
+elif enabled riscv; then
+
+    enabled rvv && check_inline_asm rvv '".option arch, +v\nvsetivli zero, 0, e8, m1, ta, ma"'
+
 elif enabled x86; then
 
     check_builtin rdtsc    intrin.h   "__rdtsc()"
@@ -6242,6 +6265,15 @@ check_builtin MemoryBarrier windows.h "MemoryBarrier()"
 check_builtin sync_val_compare_and_swap "" "int *ptr; int oldval, newval; __sync_val_compare_and_swap(ptr, oldval, newval)"
 check_builtin gmtime_r time.h "time_t *time; struct tm *tm; gmtime_r(time, tm)"
 check_builtin localtime_r time.h "time_t *time; struct tm *tm; localtime_r(time, tm)"
+
+check_builtin float16 "" "_Float16 f16var"
+if enabled float16; then
+    if enabled x86; then
+        test_cpp_condition stddef.h "defined(__F16C__)" && enable fast_float16
+    elif enabled arm || enabled aarch64; then
+        enable fast_float16
+    fi
+fi
 
 case "$custom_allocator" in
     jemalloc)
@@ -7587,6 +7619,9 @@ fi
 if enabled loongarch; then
     echo "LSX enabled               ${lsx-no}"
     echo "LASX enabled              ${lasx-no}"
+fi
+if enabled riscv; then
+    echo "RISC-V Vector enabled     ${rvv-no}"
 fi
 echo "debug symbols             ${debug-no}"
 echo "strip symbols             ${stripping-no}"

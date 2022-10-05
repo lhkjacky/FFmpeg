@@ -334,6 +334,8 @@ typedef struct InputStream {
     AVFrame *decoded_frame;
     AVPacket *pkt;
 
+    AVRational framerate_guessed;
+
     int64_t       prev_pkt_pts;
     int64_t       start;     /* time when read started */
     /* predicted dts of the next packet read for this stream or (when there are
@@ -345,6 +347,12 @@ typedef struct InputStream {
     int64_t       next_pts;  ///< synthetic pts for the next decode frame (in AV_TIME_BASE units)
     int64_t       pts;       ///< current pts of the decoded frame  (in AV_TIME_BASE units)
     int           wrap_correction_done;
+
+    // the value of AVCodecParserContext.repeat_pict from the AVStream parser
+    // for the last packet returned from ifile_get_packet()
+    // -1 if unknown
+    // FIXME: this is a hack, the avstream parser should not be used
+    int last_pkt_repeat_pict;
 
     int64_t filter_in_rescale_delta_last;
 
@@ -484,12 +492,9 @@ typedef struct OutputStream {
     AVStream *st;            /* stream in the output file */
     /* number of frames emitted by the video-encoding sync code */
     int64_t vsync_frame_number;
-    /* input pts and corresponding output pts
-       for A/V sync */
-    int64_t sync_opts;       /* output frame counter, could be changed to some true timestamp */ // FIXME look at frame_number
-    /* pts of the first frame encoded for this stream, used for limiting
-     * recording time */
-    int64_t first_pts;
+    /* predicted pts of the next frame to be encoded
+     * audio/video encoding only */
+    int64_t next_pts;
     /* dts of the last packet sent to the muxing queue, in AV_TIME_BASE_Q */
     int64_t last_mux_dts;
     /* pts of the last frame received from the filters, in AV_TIME_BASE_Q */
@@ -507,7 +512,6 @@ typedef struct OutputStream {
     AVBSFContext            *bsf_ctx;
 
     AVCodecContext *enc_ctx;
-    const AVCodec *enc;
     int64_t max_frames;
     AVFrame *filtered_frame;
     AVFrame *last_frame;
@@ -521,7 +525,6 @@ typedef struct OutputStream {
     AVRational max_frame_rate;
     enum VideoSyncMethod vsync_method;
     int is_cfr;
-    const char *fps_mode;
     int force_fps;
     int top_field_first;
     int rotate_overridden;
@@ -579,8 +582,10 @@ typedef struct OutputStream {
     int keep_pix_fmt;
 
     /* stats */
-    // combined size of all the packets written
-    uint64_t data_size;
+    // combined size of all the packets sent to the muxer
+    uint64_t data_size_mux;
+    // combined size of all the packets received from the encoder
+    uint64_t data_size_enc;
     // number of packets send to the muxer
     atomic_uint_least64_t packets_written;
     // number of frames/samples sent to the encoder
@@ -648,13 +653,10 @@ extern float audio_drift_threshold;
 extern float dts_delta_threshold;
 extern float dts_error_threshold;
 
-extern int audio_volume;
-extern int audio_sync_method;
 extern enum VideoSyncMethod video_sync_method;
 extern float frame_drop_threshold;
 extern int do_benchmark;
 extern int do_benchmark_all;
-extern int do_deinterlace;
 extern int do_hex_dump;
 extern int do_pkt_dump;
 extern int copy_ts;
@@ -667,7 +669,6 @@ extern int print_stats;
 extern int64_t stats_period;
 extern int qp_hist;
 extern int stdin_interaction;
-extern int frame_bits_per_raw_sample;
 extern AVIOContext *progress_avio;
 extern float max_error_rate;
 
@@ -679,9 +680,6 @@ extern int auto_conversion_filters;
 extern const AVIOInterruptCB int_cb;
 
 extern const OptionDef options[];
-#if CONFIG_QSV
-extern char *qsv_device;
-#endif
 extern HWDevice *filter_hw_device;
 
 extern unsigned nb_output_dumped;
@@ -707,9 +705,6 @@ void sub2video_update(InputStream *ist, int64_t heartbeat_pts, AVSubtitle *sub);
 int ifilter_parameters_from_frame(InputFilter *ifilter, const AVFrame *frame);
 
 int ffmpeg_parse_options(int argc, char **argv);
-
-int videotoolbox_init(AVCodecContext *s);
-int qsv_init(AVCodecContext *s);
 
 HWDevice *hw_device_get_by_name(const char *name);
 int hw_device_init_from_string(const char *arg, HWDevice **dev);
