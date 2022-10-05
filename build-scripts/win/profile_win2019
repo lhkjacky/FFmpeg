@@ -8,6 +8,7 @@ compiler.version=16
 compiler.cppstd=14
 build_type=Release
 libvpx:compiler.runtime=MT
+aom:compiler.runtime=MT
 [options]
 [build_requires]
 [env]
