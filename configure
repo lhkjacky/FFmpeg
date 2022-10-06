@@ -6650,7 +6650,7 @@ elif enabled libvpl; then
 # Consider pkg-config only. The name of libmfx is still passed to check_pkg_config function for --enable-libvpl option
 # because QSV has dependency on libmfx, we can use the same dependency if using libmfx in this check. The package name
 # is extracted from "vpl >= 2.6"
-    check_pkg_config libmfx "vpl >= 2.6" "mfxvideo.h mfxdispatcher.h" MFXLoad || \
+    check_pkg_config libmfx "vpl >= 2.6" "mfxvideo.h mfxdispatcher.h" MFXLoad || check_lib libmfx "mfxvideo.h mfxdispatcher.h" MFXLoad "-lvpl $advapi32_extralibs" || \
             die "ERROR: libvpl >= 2.6 not found"
 fi
 
