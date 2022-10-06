@@ -15,6 +15,7 @@ class conanRecipe(ConanFile):
     def requirements(self):
         self.requires("videoai/0.8.4")
         self.requires("libvpx/1.11.0")
+        self.requires("aom/3.5.0")
         if self.settings.os == "Macos":
             if self.settings.arch == "x86_64":
                 self.requires("nasm/2.14")
