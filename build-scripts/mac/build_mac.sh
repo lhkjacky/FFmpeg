@@ -3,7 +3,7 @@
 #OLD_PKG_CONFIG_PATH=$PKG_CONFIG_PATH
 
 if [ -z "$2" -o -z "$3" -o -z "$4" ]; then
-	echo "Usage: ./build_mac.sh [veai enabled? (0 or 1)] [arm output path] [x86 output path] [universal output path] (extra cflags) (extra ldflags) (path to arm openh264 binaries) (path to x86 openh264 binaries)"
+	echo "Usage: ./build_mac.sh [tvai enabled? (0 or 1)] [arm output path] [x86 output path] [universal output path] (extra cflags) (extra ldflags) (path to arm openh264 binaries) (path to x86 openh264 binaries)"
 	exit 1
 fi;
 
@@ -14,8 +14,8 @@ if [[ "$1" -eq 1 ]]; then
 	CONAN_X64=./conan_x64
 	CONAN_ARM=./conan_arm
 	export PATH=${CONAN_X64}/bin:${CONAN_ARM}/bin:$PATH
-	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib -headerpad_max_install_names $6" --enable-veai ${FLAGS[@]})
-	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-veai --enable-libvpx --enable-libaom --enable-openssl --disable-ffplay --disable-libxcb --disable-sdl2 --disable-xlib)
+	FLAGS=(--extra-cflags="-I${CONAN_ARM}/include/videoai -I${CONAN_ARM}/include $5" --extra-ldflags="-L${CONAN_ARM}/lib -headerpad_max_install_names $6" --enable-tvai ${FLAGS[@]})
+	XFLAGS=(--arch=x86_64 --extra-cflags="-arch x86_64 -I${CONAN_X64}/include/videoai -I${CONAN_X64}/include $5" --extra-ldflags="-arch x86_64 -L${CONAN_X64}/lib -headerpad_max_install_names $6" --enable-shared --disable-static --enable-cross-compile --enable-tvai --enable-libvpx --enable-libaom --enable-openssl --disable-ffplay --disable-libxcb --disable-sdl2 --disable-xlib)
 fi
 
 echo "$2, $3, and $4 will be deleted in 10 seconds. Press control-c to abort..."
