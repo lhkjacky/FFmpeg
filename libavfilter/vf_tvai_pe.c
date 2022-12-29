@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 Clément Bœsch <u pkh me>
+ * Copyright (c) 2022 Topaz Labs LLC
  *
  * This file is part of FFmpeg.
  *
@@ -20,51 +20,51 @@
 
 /**
  * @file
- * Video Enhance AI filter
+ * Video Enhance AI Parameter Estimation filter
  *
- * @see https://www.topazlabs.com/video-enhance-ai
+ * @see https://www.topazlabs.com/topaz-video-ai
  */
 
 #include "libavutil/avassert.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/opt.h"
 #include "libavutil/avutil.h"
-#include "veai_common.h"
+#include "tvai_common.h"
 
-typedef struct VEAIParamContext {
+typedef struct TVAIParamContext {
     const AVClass *class;
     char *model;
     int device;
     int canDownloadModels;
     void* pParamEstimator;
     int firstFrame;
-} VEAIParamContext;
+} TVAIParamContext;
 
-#define OFFSET(x) offsetof(VEAIParamContext, x)
+#define OFFSET(x) offsetof(TVAIParamContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
-static const AVOption veai_pe_options[] = {
+static const AVOption tvai_pe_options[] = {
     { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="prap-3"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
     { NULL }
 };
 
-AVFILTER_DEFINE_CLASS(veai_pe);
+AVFILTER_DEFINE_CLASS(tvai_pe);
 
 static av_cold int init(AVFilterContext *ctx) {
-  VEAIParamContext *veai = ctx->priv;
-  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", veai->model, veai->device);
-  veai->firstFrame = 1;
-  return veai->pParamEstimator == NULL;
+  TVAIParamContext *tvai = ctx->priv;
+  av_log(NULL, AV_LOG_DEBUG, "Here init with params: %s %d\n", tvai->model, tvai->device);
+  tvai->firstFrame = 1;
+  return tvai->pParamEstimator == NULL;
 }
 
 static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
-    VEAIParamContext *veai = ctx->priv;
+    TVAIParamContext *tvai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
 
-    veai->pParamEstimator = ff_veai_verifyAndCreate(inlink, outlink, (char*)"pe", veai->model, ModelTypeParameterEstimation, veai->device, 0, 1, 1, veai->canDownloadModels, NULL, 0, ctx);
-    return veai->pParamEstimator == NULL ? AVERROR(EINVAL) : 0;
+    tvai->pParamEstimator = ff_tvai_verifyAndCreate(inlink, outlink, (char*)"pe", tvai->model, ModelTypeParameterEstimation, tvai->device, 0, 1, 1, tvai->canDownloadModels, NULL, 0, ctx);
+    return tvai->pParamEstimator == NULL ? AVERROR(EINVAL) : 0;
     return 0;
 }
 
@@ -76,23 +76,23 @@ static const enum AVPixelFormat pix_fmts[] = {
 
 static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
-    VEAIParamContext *veai = ctx->priv;
+    TVAIParamContext *tvai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    float parameters[VEAI_MAX_PARAMETER_COUNT] = {0};
-    int result = ff_veai_estimateParam(ctx, veai->pParamEstimator, in, veai->firstFrame, parameters);
+    float parameters[TVAI_MAX_PARAMETER_COUNT] = {0};
+    int result = ff_tvai_estimateParam(ctx, tvai->pParamEstimator, in, tvai->firstFrame, parameters);
     if(!(result == 0 || result == 1)) {
         return result;
     }
-    veai->firstFrame = 0;
+    tvai->firstFrame = 0;
     return ff_filter_frame(outlink, in);
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
-    VEAIParamContext *veai = ctx->priv;
-    veai_destroy(veai->pParamEstimator);
+    TVAIParamContext *tvai = ctx->priv;
+    tvai_destroy(tvai->pParamEstimator);
 }
 
-static const AVFilterPad veai_pe_inputs[] = {
+static const AVFilterPad tvai_pe_inputs[] = {
     {
         .name         = "default",
         .type         = AVMEDIA_TYPE_VIDEO,
@@ -100,7 +100,7 @@ static const AVFilterPad veai_pe_inputs[] = {
     },
 };
 
-static const AVFilterPad veai_pe_outputs[] = {
+static const AVFilterPad tvai_pe_outputs[] = {
     {
         .name = "default",
         .type = AVMEDIA_TYPE_VIDEO,
@@ -108,15 +108,15 @@ static const AVFilterPad veai_pe_outputs[] = {
     },
 };
 
-const AVFilter ff_vf_veai_pe = {
-    .name          = "veai_pe",
-    .description   = NULL_IF_CONFIG_SMALL("Apply Video Enhance AI models."),
-    .priv_size     = sizeof(VEAIParamContext),
+const AVFilter ff_vf_tvai_pe = {
+    .name          = "tvai_pe",
+    .description   = NULL_IF_CONFIG_SMALL("Apply Topaz Video AI parameter estimation models."),
+    .priv_size     = sizeof(TVAIParamContext),
     .init          = init,
     .uninit        = uninit,
-    FILTER_INPUTS(veai_pe_inputs),
-    FILTER_OUTPUTS(veai_pe_outputs),
+    FILTER_INPUTS(tvai_pe_inputs),
+    FILTER_OUTPUTS(tvai_pe_outputs),
     FILTER_PIXFMTS_ARRAY(pix_fmts),
-    .priv_class    = &veai_pe_class,
+    .priv_class    = &tvai_pe_class,
     .flags         = AVFILTER_FLAG_SUPPORT_TIMELINE_GENERIC,
 };
