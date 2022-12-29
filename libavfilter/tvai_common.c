@@ -45,9 +45,9 @@ int ff_tvai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
   info->basic.processorName = processorName;
   info->basic.modelName = modelName;
   info->basic.scale = scale;
-  info->basic.deviceIndex = deviceIndex;
-  info->basic.extraThreadCount = extraThreads;
-  info->basic.maxMemory = vram;
+  info->basic.device.index = deviceIndex;
+  info->basic.device.extraThreadCount = extraThreads;
+  info->basic.device.maxMemory = vram;
   info->basic.canDownloadModel = canDownloadModels;
   info->basic.inputWidth = inlink->w;
   info->basic.inputHeight = inlink->h;
@@ -62,8 +62,8 @@ int ff_tvai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
   outlink->frame_rate = inlink->frame_rate;
   outlink->sample_aspect_ratio = inlink->sample_aspect_ratio;
   av_log(ctx, AV_LOG_DEBUG, "Output size set to: %d %d\n", outlink->w, outlink->h);
-  av_log(ctx, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info->basic.processorName, info->basic.modelName, info->basic.scale, info->basic.deviceIndex,
-          info->basic.extraThreadCount, info->basic.canDownloadModel, info->basic.inputWidth, info->basic.inputHeight, info->basic.timebase, info->basic.framerate);
+  av_log(ctx, AV_LOG_DEBUG, "Here Config props model with params: %s %s %d %d %d %d %d %d %lf %lf\n", info->basic.processorName, info->basic.modelName, info->basic.scale, info->basic.device.index,
+          info->basic.device.extraThreadCount, info->basic.canDownloadModel, info->basic.inputWidth, info->basic.inputHeight, info->basic.timebase, info->basic.framerate);
   return 0;
 }
 
