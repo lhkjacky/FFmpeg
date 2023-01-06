@@ -115,28 +115,17 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     TVAIStbContext *tvai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    AVFrame *out;
-    IOBuffer ioBuffer;
-    ff_tvai_prepareBufferInput(&ioBuffer, in);
-    out = ff_tvai_prepareBufferOutput(outlink, &ioBuffer.output);
-    if(tvai->pFrameProcessor == NULL || out == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer, 1)) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed");
+    int ret = 0;
+    if(ff_tvai_process(tvai->pFrameProcessor, in, 0)) {
+        av_log(NULL, AV_LOG_ERROR, "The processing has failed\n");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-    double its = TS2T(in->pts, inlink->time_base);
-    av_frame_copy_props(out, in);
-    out->pts = ioBuffer.output.pts;
     if(tvai->previousFrame)
-      av_frame_free(&tvai->previousFrame);
+        av_frame_free(&tvai->previousFrame);
     tvai->previousFrame = in;
-    if(ioBuffer.output.pts < 0) {
-      av_frame_free(&out);
-      av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %s %lf %lf\n", tvai->model, its, TS2T(ioBuffer.output.pts, outlink->time_base));
-      return 0;
-    }
-    av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %s %lf %lf\n", tvai->model, its, TS2T(ioBuffer.output.pts, outlink->time_base));
-    return ff_filter_frame(outlink, out);
+    ret = ff_tvai_add_output(tvai->pFrameProcessor, outlink, in, 0);
+    return ret;
 }
 
 static int request_frame(AVFilterLink *outlink) {
@@ -144,12 +133,12 @@ static int request_frame(AVFilterLink *outlink) {
     TVAIStbContext *tvai = ctx->priv;
     int ret = ff_request_frame(ctx->inputs[0]);
     if (ret == AVERROR_EOF) {
-        if(ff_tvai_handlePostFlight(tvai->pFrameProcessor, outlink, tvai->previousFrame, ctx)) {
-          av_log(NULL, AV_LOG_ERROR, "The postflight processing has failed");
-          av_frame_free(&tvai->previousFrame);
-          return AVERROR(ENOSYS);
+        tvai_end_stream(tvai->pFrameProcessor);
+        while(tvai_remaining_frames(tvai->pFrameProcessor) > 0) {
+            if(ff_tvai_add_output(tvai->pFrameProcessor, outlink, tvai->previousFrame, 0))
+                return ret;
+            tvai_wait(20);
         }
-        av_frame_free(&tvai->previousFrame);
         av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", tvai->model, tvai->pFrameProcessor == NULL);
     }
     return ret;

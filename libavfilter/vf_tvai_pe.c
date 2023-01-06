@@ -78,13 +78,24 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     TVAIParamContext *tvai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    float parameters[TVAI_MAX_PARAMETER_COUNT] = {0};
-    int result = ff_tvai_estimateParam(ctx, tvai->pParamEstimator, in, tvai->firstFrame, parameters);
-    if(!(result == 0 || result == 1)) {
-        return result;
+    int ret = 0;
+    if(ff_tvai_process(tvai->pParamEstimator, in, 0)) {
+        av_log(NULL, AV_LOG_ERROR, "The processing has failed\n");
+        av_frame_free(&in);
+        return AVERROR(ENOSYS);
     }
-    tvai->firstFrame = 0;
     return ff_filter_frame(outlink, in);
+}
+
+static int request_frame(AVFilterLink *outlink) {
+    AVFilterContext *ctx = outlink->src;
+    TVAIParamContext *tvai = ctx->priv;
+    int ret = ff_request_frame(ctx->inputs[0]);
+    if (ret == AVERROR_EOF) {
+        tvai_end_stream(tvai->pParamEstimator);
+        av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", tvai->model, tvai->pParamEstimator == NULL);
+    }
+    return ret;
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {

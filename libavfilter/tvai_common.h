@@ -22,8 +22,10 @@ void* ff_tvai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char 
                             int deviceIndex, int extraThreads, int vram, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx);
 void ff_tvai_prepareBufferInput(TVAIBuffer* ioBuffer, AVFrame *in);
 AVFrame* ff_tvai_prepareBufferOutput(AVFilterLink *outlink, TVAIBuffer* oBuffer);
-int ff_tvai_estimateParam(AVFilterContext* ctx, void* pProcessor, AVFrame* in, int isFirstFrame, float *parameters);
 int ff_tvai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx);
 int ff_tvai_handleQueue(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx);
+
+int ff_tvai_add_output(void *pProcessor, AVFilterLink *outlink, AVFrame* frame, int copy);
+int ff_tvai_process(void *pFrameProcessor, AVFrame* frame, int copy);
 
 #endif

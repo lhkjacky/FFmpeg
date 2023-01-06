@@ -148,24 +148,36 @@ int ff_tvai_handleQueue(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AV
     return 0;
 }
 
-int ff_tvai_estimateParam(AVFilterContext* ctx, void* pProcessor, AVFrame* in, int isFirstFrame, float *parameters) {
-    IOBuffer ioBuffer;
-    ff_tvai_prepareBufferInput(&ioBuffer, in);
-    ioBuffer.output.pBuffer = (unsigned char *)parameters;
-    ioBuffer.output.lineSize = sizeof(float)*TVAI_MAX_PARAMETER_COUNT;
-    if(pProcessor == NULL || tvai_process(pProcessor,  &ioBuffer, 0)) {
-        av_log(NULL, AV_LOG_ERROR, "The processing has failed");
-        av_frame_free(&in);
-        return AVERROR(ENOSYS);
-    }
-    if(ioBuffer.output.pts < 0) {
-        av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lld\n", ioBuffer.output.pts);
+int ff_tvai_process(void *pFrameProcessor, AVFrame* frame, int copy) {
+    TVAIBuffer iBuffer;
+    ff_tvai_prepareBufferInput(&iBuffer, frame);
+    if(pFrameProcessor == NULL || tvai_process(pFrameProcessor, &iBuffer, copy)) 
         return 1;
-    }
-    av_log(ctx, AV_LOG_WARNING, "Parameter values:[");
-    for(int i=0;i<TVAI_MAX_PARAMETER_COUNT;i++) {
-        av_log(ctx, AV_LOG_WARNING, " %f,", parameters[i]);
-    }
-    av_log(ctx, AV_LOG_WARNING, "]\n");
     return 0;
 }
+
+int ff_tvai_add_output(void *pProcessor, AVFilterLink *outlink, AVFrame* frame, int copy) {
+    int n = tvai_output_count(pProcessor), i;
+    for(i=0;i<n;i++) {
+        TVAIBuffer oBuffer;
+        AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
+        if(out != NULL && tvai_output_frame(pProcessor, &oBuffer, copy) == 0) {
+            av_frame_copy_props(out, frame);
+            out->pts = oBuffer.pts;
+            int ret = 0;
+            if(oBuffer.pts >= 0)
+                ret = ff_filter_frame(outlink, out);
+            if(oBuffer.pts < 0 || ret) {
+                av_frame_free(&out);
+                av_log(NULL, AV_LOG_ERROR, "Ignoring frame %ld %ld %lf\n", oBuffer.pts, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
+                return ret;
+            }
+            av_log(NULL, AV_LOG_DEBUG, "Finished processing frame %ld %ld %lf\n", oBuffer.pts, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
+        } else {
+            av_log(NULL, AV_LOG_ERROR, "Error processing frame %ld %ld %lf\n", oBuffer.pts, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
+            return AVERROR(ENOSYS);
+        }
+    }
+    return 0;
+}
+
