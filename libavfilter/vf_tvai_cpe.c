@@ -96,7 +96,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     ioBuffer.output.pBuffer = (unsigned char *)transform;
     ioBuffer.output.lineSize = sizeof(float)*6;
 
-    if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer)) {
+    if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer, 1)) {
         av_log(ctx, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
@@ -116,7 +116,7 @@ static int request_frame(AVFilterLink *outlink) {
             float transform[6] = {0,0,0,0,0,0};
             oBuffer.pBuffer = (unsigned char *)transform;
             oBuffer.lineSize = sizeof(float)*6;
-            if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor, &oBuffer)) {
+            if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor, &oBuffer, 1)) {
                 av_log(ctx, AV_LOG_ERROR, "The post flight processing has failed");
                 return AVERROR(ENOSYS);
             }

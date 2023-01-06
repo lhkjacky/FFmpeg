@@ -35,6 +35,7 @@
 #include "video.h"
 #include "tvai.h"
 #include "tvai_common.h"
+#include "unistd.h"
 
 typedef struct TVAIUpContext {
     const AVClass *class;
@@ -44,8 +45,8 @@ typedef struct TVAIUpContext {
     int estimateFrameCount, count, estimating, w, h;
     double vram;
     double preBlur, noise, details, halo, blur, compression;
+    double prenoise, grain, grainSize;
     void* pFrameProcessor;
-    void* pParamEstimator;
     AVFrame* previousFrame;
 } TVAIUpContext;
 
@@ -67,6 +68,9 @@ static const AVOption tvai_up_options[] = {
     { "halo",  "Increase this if the input video has halo or ring artifacts around strong edges caused by oversharpening. \nThis value is relative to the amount of haloing artifacts in the input video, and has a \"sweet spot\". Values that are too high for the input video may cause additional artifacts to appear.",  OFFSET(halo),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "halo" },
     { "blur",  "Additional sharpening of the video. Use this if the input video looks too soft. \nThe value set should be relative to the amount of softness in the input video - if the input video is already sharp, higher values will introduce more artifacts.",  OFFSET(blur),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "blur" },
     { "compression",  "Reduces compression artifacts from codec encoding, such as blockiness or mosquito noise. Higher values are best for low bitrate videos.\nNote that the value should be relative to the amount of compression artifacts in the input video - higher values on a video with few compression artifacts will introduce more artifacts into the output.",  OFFSET(compression),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, -1.0, 1.0, FLAGS, "compression" },
+    { "prenoise",  "The amount of noise to add to the input before processing",  OFFSET(prenoise),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, 0.0, 10.0, FLAGS, "prenoise" },
+    { "grain",  "The amount of grain to add to the output",  OFFSET(grain),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, 0.0, 10.0, FLAGS, "grain" },
+    { "gsize",  "The size of grain to be added",  OFFSET(grainSize),  AV_OPT_TYPE_DOUBLE, {.dbl=0}, 0.0, 5.0, FLAGS, "gsize" },
     { NULL }
 };
 
@@ -85,7 +89,7 @@ static int config_props(AVFilterLink *outlink) {
     AVFilterContext *ctx = outlink->src;
     TVAIUpContext *tvai = ctx->priv;
     AVFilterLink *inlink = ctx->inputs[0];
-    float parameter_values[6] = {tvai->preBlur, tvai->noise, tvai->details, tvai->halo, tvai->blur, tvai->compression};
+    float parameter_values[10] = {tvai->preBlur, tvai->noise, tvai->details, tvai->halo, tvai->blur, tvai->compression, 0, tvai->prenoise, tvai->grain, tvai->grainSize};
     VideoProcessorInfo info;
     int scale = tvai->scale;
     double sar = av_q2d(inlink->sample_aspect_ratio) > 0 ? av_q2d(inlink->sample_aspect_ratio) : 1;
@@ -98,11 +102,12 @@ static int config_props(AVFilterLink *outlink) {
     }
     info.frameCount = tvai->estimateFrameCount;
     av_log(ctx, AV_LOG_VERBOSE, "Here init with perf options: model: %s scale: %d device: %d vram: %lf threads: %d downloads: %d\n", tvai->model, tvai->scale, tvai->device,tvai->vram, tvai->extraThreads, tvai->canDownloadModels);
-    if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, (tvai->estimateFrameCount > 0) ? (char*)"ad" : (char*)"up", tvai->model, ModelTypeUpscaling, tvai->device, tvai->extraThreads, tvai->vram,
+    if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, (tvai->estimateFrameCount > 0) ? (char*)"aup" : (char*)"up", tvai->model, ModelTypeUpscaling, tvai->device, tvai->extraThreads, tvai->vram,
                                                     scale, tvai->canDownloadModels, parameter_values, 6, ctx)) {
       return AVERROR(EINVAL);
     }
     tvai->pFrameProcessor = tvai_create(&info);
+    tvai->previousFrame = NULL;
     return tvai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
@@ -111,30 +116,34 @@ static const enum AVPixelFormat pix_fmts[] = {
     AV_PIX_FMT_NONE
 };
 
-static int ff_tvai_process(void *pFrameProcessor, AVFrame* frame) {
+static int ff_tvai_process(void *pFrameProcessor, AVFrame* frame, int copy) {
     TVAIBuffer iBuffer;
     ff_tvai_prepareBufferInput(&iBuffer, frame);
-    if(pFrameProcessor == NULL || tvai_process(pFrameProcessor,  &iBuffer)) 
+    if(pFrameProcessor == NULL || tvai_process(pFrameProcessor, &iBuffer, copy)) 
         return 1;
     return 0;
 }
 
-static int ff_tvai_add_output(TVAIUpContext *tvai, AVFilterLink *outlink, AVFrame* frame) {
-    int n = tvai_output_count(tvai->pFrameProcessor), i;
-    AVFrame *out;
-    TVAIBuffer oBuffer;
+static int ff_tvai_add_output(void *pProcessor, AVFilterLink *outlink, AVFrame* frame, int copy) {
+    int n = tvai_output_count(pProcessor), i;
     for(i=0;i<n;i++) {
-        out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
-        if(tvai->pFrameProcessor == NULL || out == NULL || tvai_output_frame(tvai->pFrameProcessor, &oBuffer)) {
+        TVAIBuffer oBuffer;
+        AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
+        if(out != NULL && tvai_output_frame(pProcessor, &oBuffer, copy) == 0) {
             av_frame_copy_props(out, frame);
             out->pts = oBuffer.pts;
-            int ret = ff_filter_frame(outlink, frame);
+            int ret = 0;
+            if(oBuffer.pts >= 0)
+                ret = ff_filter_frame(outlink, out);
             if(oBuffer.pts < 0 || ret) {
                 av_frame_free(&out);
-                av_log(NULL, AV_LOG_DEBUG, "Ignoring frame %s %u %ld %lf\n", tvai->model, tvai->scale, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
+                av_log(NULL, AV_LOG_ERROR, "Ignoring frame %ld %ld %lf\n", oBuffer.pts, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
                 return ret;
             }
-            av_log(NULL, AV_LOG_DEBUG, "Finished processing frame %s %u %ld %lf\n", tvai->model, tvai->scale, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
+            av_log(NULL, AV_LOG_DEBUG, "Finished processing frame %ld %ld %lf\n", oBuffer.pts, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
+        } else {
+            av_log(NULL, AV_LOG_ERROR, "Error processing frame %ld %ld %lf\n", oBuffer.pts, frame->pts, TS2T(oBuffer.pts, outlink->time_base));
+            return AVERROR(ENOSYS);
         }
     }
     return 0;
@@ -144,18 +153,16 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     AVFilterContext *ctx = inlink->dst;
     TVAIUpContext *tvai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
-    
-    // if(tvai->estimateFrameCount > 0 && tvai->estimateFrameCount+1 == inlink->frame_count_in) {
-    //     ff_tvai_handleQueue(tvai->pFrameProcessor, outlink, tvai->previousFrame, ctx);
-    // }
-    if(ff_tvai_process(tvai->pFrameProcessor, in)) {
+    int ret = 0;
+    if(ff_tvai_process(tvai->pFrameProcessor, in, 0)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed\n");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
-
-    
-    int ret = ff_tvai_add_output(tvai, outlink, in);
+    if(tvai->previousFrame)
+        av_frame_free(&tvai->previousFrame);
+    tvai->previousFrame = in;
+    ret = ff_tvai_add_output(tvai->pFrameProcessor, outlink, in, 0);
     return ret;
 }
 
@@ -164,12 +171,12 @@ static int request_frame(AVFilterLink *outlink) {
     TVAIUpContext *tvai = ctx->priv;
     int ret = ff_request_frame(ctx->inputs[0]);
     if (ret == AVERROR_EOF) {
-        if(ff_tvai_handlePostFlight(tvai->pFrameProcessor, outlink, tvai->previousFrame, ctx)) {
-          av_log(NULL, AV_LOG_ERROR, "The postflight processing has failed");
-          av_frame_free(&tvai->previousFrame);
-          return AVERROR(ENOSYS);
+        tvai_end_stream(tvai->pFrameProcessor);
+        while(tvai_remaining_frames(tvai->pFrameProcessor) > 0) {
+            if(ff_tvai_add_output(tvai->pFrameProcessor, outlink, tvai->previousFrame, 0))
+                return ret;
+            sleep(0.2);
         }
-        av_frame_free(&tvai->previousFrame);
         av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", tvai->model, tvai->pFrameProcessor == NULL);
     }
     return ret;
@@ -178,11 +185,8 @@ static int request_frame(AVFilterLink *outlink) {
 static av_cold void uninit(AVFilterContext *ctx) {
     TVAIUpContext *tvai = ctx->priv;
     av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %d\n", tvai->model, tvai->pFrameProcessor == NULL);
-    if(tvai->pFrameProcessor)
-        tvai_destroy(tvai->pFrameProcessor);
-    if(tvai->pParamEstimator)
-        tvai_destroy(tvai->pParamEstimator);
-
+    // if(tvai->pFrameProcessor)
+    //     tvai_destroy(tvai->pFrameProcessor);
 }
 
 static const AVFilterPad tvai_up_inputs[] = {

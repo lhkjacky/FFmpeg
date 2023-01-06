@@ -126,7 +126,7 @@ static int filter_frame_chronos(AVFilterLink *inlink, AVFrame *in) {
     float location = 0;
     static int ocount = 0;
     ff_tvai_prepareBufferInput(&ioBuffer, in);
-    if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer)) {
+    if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer, 0)) {
         av_log(ctx, AV_LOG_ERROR, "The processing has failed adding a frame\n");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
@@ -166,7 +166,7 @@ static int filter_frame_apollo(AVFilterLink *inlink, AVFrame *in) {
     float location = 0;
     static int ocount = 0;
     ff_tvai_prepareBufferInput(&ioBuffer, in);
-    if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer)) {
+    if(tvai->pFrameProcessor == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer, 0)) {
         av_log(ctx, AV_LOG_ERROR, "The processing has failed adding a frame\n");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
@@ -227,7 +227,7 @@ int handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFil
     for(i=0; i<2; i++) {
         TVAIBuffer oBuffer;
         AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
-        if(pProcessor == NULL || out == NULL || tvai_process(pProcessor, &oBuffer)) {
+        if(pProcessor == NULL || out == NULL || tvai_process(pProcessor, &oBuffer, 0)) {
             av_log(ctx, AV_LOG_ERROR, "The processing has failed");
             av_frame_free(&in);
             return AVERROR(ENOSYS);

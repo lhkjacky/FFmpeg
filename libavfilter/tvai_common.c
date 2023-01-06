@@ -98,7 +98,7 @@ int ff_tvai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *i
     for(i=0;i<n;i++) {
         TVAIBuffer oBuffer;
         AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
-        if(pProcessor == NULL || out == NULL ||tvai_process(pProcessor, &oBuffer)) {
+        if(pProcessor == NULL || out == NULL ||tvai_process(pProcessor, &oBuffer, 0)) {
             av_log(ctx, AV_LOG_ERROR, "The processing has failed");
             av_frame_free(&in);
             return AVERROR(ENOSYS);
@@ -126,7 +126,7 @@ int ff_tvai_handleQueue(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AV
     for(i=0;i<n;i++) {
         TVAIBuffer oBuffer;
         AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
-        if(pProcessor == NULL || out == NULL ||tvai_process(pProcessor, &oBuffer)) {
+        if(pProcessor == NULL || out == NULL ||tvai_process(pProcessor, &oBuffer, 0)) {
             av_log(ctx, AV_LOG_ERROR, "The processing has failed");
             av_frame_free(&in);
             return AVERROR(ENOSYS);
@@ -153,7 +153,7 @@ int ff_tvai_estimateParam(AVFilterContext* ctx, void* pProcessor, AVFrame* in, i
     ff_tvai_prepareBufferInput(&ioBuffer, in);
     ioBuffer.output.pBuffer = (unsigned char *)parameters;
     ioBuffer.output.lineSize = sizeof(float)*TVAI_MAX_PARAMETER_COUNT;
-    if(pProcessor == NULL || tvai_process(pProcessor,  &ioBuffer)) {
+    if(pProcessor == NULL || tvai_process(pProcessor,  &ioBuffer, 0)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);

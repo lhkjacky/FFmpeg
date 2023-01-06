@@ -119,7 +119,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     IOBuffer ioBuffer;
     ff_tvai_prepareBufferInput(&ioBuffer, in);
     out = ff_tvai_prepareBufferOutput(outlink, &ioBuffer.output);
-    if(tvai->pFrameProcessor == NULL || out == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer)) {
+    if(tvai->pFrameProcessor == NULL || out == NULL || tvai_process(tvai->pFrameProcessor,  &ioBuffer, 1)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
