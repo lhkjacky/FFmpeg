@@ -105,15 +105,16 @@ static int request_frame(AVFilterLink *outlink) {
     if (ret == AVERROR_EOF) {
         tvai_end_stream(tvai->pParamEstimator);
         av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", tvai->model, tvai->pParamEstimator == NULL);
+        tvai_wait(3000);
     }
     return ret;
 }
 
 static av_cold void uninit(AVFilterContext *ctx) {
-    TVAICPEContext *tvai = ctx->priv;
-    av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s\n", tvai->model);
-    if(tvai->pParamEstimator)
-        tvai_destroy(tvai->pParamEstimator);
+    // TVAICPEContext *tvai = ctx->priv;
+    // av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s\n", tvai->model);
+    // if(tvai->pParamEstimator)
+    //     tvai_destroy(tvai->pParamEstimator);
 }
 
 static const AVFilterPad tvai_cpe_inputs[] = {
