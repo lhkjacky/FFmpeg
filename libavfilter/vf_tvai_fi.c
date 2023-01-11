@@ -91,8 +91,8 @@ static int config_props(AVFilterLink *outlink) {
     av_log(ctx, AV_LOG_DEBUG, "Set frame rate to %lf -> %lf\n", av_q2d(inlink->frame_rate), av_q2d(outlink->frame_rate));
     av_log(ctx, AV_LOG_DEBUG, "Set fpsFactor to %lf generating %lf frames\n", fpsFactor, 1/fpsFactor);
     threshold = fpsFactor*0.3;
-    float params[2] = {threshold, fpsFactor, tvai->slowmo};
-    tvai->pFrameProcessor = ff_tvai_verifyAndCreate(inlink, outlink, (char*)"fi", tvai->model, ModelTypeFrameInterpolation, tvai->device, tvai->extraThreads, tvai->vram, 1, tvai->canDownloadModels, params, 2, ctx);
+    float params[3] = {threshold, fpsFactor, tvai->slowmo};
+    tvai->pFrameProcessor = ff_tvai_verifyAndCreate(inlink, outlink, (char*)"fi", tvai->model, ModelTypeFrameInterpolation, tvai->device, tvai->extraThreads, tvai->vram, 1, tvai->canDownloadModels, params, 3, ctx);
     outlink->time_base = inlink->time_base;
     outlink->frame_rate = tvai->frame_rate.num > 0 ? tvai->frame_rate : inlink->frame_rate;
     return tvai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
