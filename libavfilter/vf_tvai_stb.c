@@ -92,7 +92,7 @@ static int config_props(AVFilterLink *outlink) {
   info.options[1] = tvai->filler;
   float smoothness = tvai->smoothness;
   float params[11] = {tvai->smoothness, tvai->windowSize, tvai->postFlight, tvai->canvasScaleX, tvai->canvasScaleY, tvai->cacheSize, tvai->stabDOF, tvai->enableRSC, tvai->readStartTime, tvai->writeStartTime, tvai->reduceMotion};
-  if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, (tvai->enableFullFrame > 0) ? (char*)"st" : (char*)"stx", tvai->model, ModelTypeStabilization, tvai->device, tvai->extraThreads, tvai->vram, 1, tvai->canDownloadModels, params, 11, ctx)) {
+  if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, (tvai->enableFullFrame > 0) ? (char*)"ffs" : (char*)"acs", tvai->model, ModelTypeStabilization, tvai->device, tvai->extraThreads, tvai->vram, 1, tvai->canDownloadModels, params, 11, ctx)) {
     return AVERROR(EINVAL);
   }
   tvai->pFrameProcessor = tvai_create(&info);
@@ -147,8 +147,8 @@ static int request_frame(AVFilterLink *outlink) {
 static av_cold void uninit(AVFilterContext *ctx) {
     TVAIStbContext *tvai = ctx->priv;
     av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s %d\n", tvai->model, tvai->pFrameProcessor == NULL);
-    if(tvai->pFrameProcessor)
-        tvai_destroy(tvai->pFrameProcessor);
+    // if(tvai->pFrameProcessor)
+    //     tvai_destroy(tvai->pFrameProcessor);
 }
 
 static const AVFilterPad tvai_stb_inputs[] = {

@@ -41,7 +41,7 @@ typedef struct TVAICPEContext {
     char *model, *filename;
     int device;
     int canDownloadModels;
-    void* pParamEstimator;
+    void* pFrameProcessor;
     unsigned int counter;
     int rsc;
 } TVAICPEContext;
@@ -76,8 +76,8 @@ static int config_props(AVFilterLink *outlink) {
     if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, (char*)"cpe", tvai->model, ModelTypeCamPoseEstimation, tvai->device, 0, 1, 1, tvai->canDownloadModels, &tvai->rsc, 1, ctx)) {
       return AVERROR(EINVAL);
     }
-    tvai->pParamEstimator = tvai_create(&info);
-    return tvai->pParamEstimator == NULL ? AVERROR(EINVAL) : 0;
+    tvai->pFrameProcessor = tvai_create(&info);
+    return tvai->pFrameProcessor == NULL ? AVERROR(EINVAL) : 0;
 }
 
 static const enum AVPixelFormat pix_fmts[] = {
@@ -90,11 +90,12 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in) {
     TVAICPEContext *tvai = ctx->priv;
     AVFilterLink *outlink = ctx->outputs[0];
     int ret = 0;
-    if(ff_tvai_process(tvai->pParamEstimator, in, 0)) {
+    if(ff_tvai_process(tvai->pFrameProcessor, in, 0)) {
         av_log(NULL, AV_LOG_ERROR, "The processing has failed\n");
         av_frame_free(&in);
         return AVERROR(ENOSYS);
     }
+    ff_tvai_ignore_output(tvai->pFrameProcessor);
     return ff_filter_frame(outlink, in);
 }
 
@@ -103,8 +104,12 @@ static int request_frame(AVFilterLink *outlink) {
     TVAICPEContext *tvai = ctx->priv;
     int ret = ff_request_frame(ctx->inputs[0]);
     if (ret == AVERROR_EOF) {
-        tvai_end_stream(tvai->pParamEstimator);
-        av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", tvai->model, tvai->pParamEstimator == NULL);
+        tvai_end_stream(tvai->pFrameProcessor);
+        while(tvai_remaining_frames(tvai->pFrameProcessor) > 0) {
+            ff_tvai_ignore_output(tvai->pFrameProcessor);
+            tvai_wait(20);
+        }
+        av_log(ctx, AV_LOG_DEBUG, "End of file reached %s %d\n", tvai->model, tvai->pFrameProcessor == NULL);
     }
     return ret;
 }
@@ -112,8 +117,8 @@ static int request_frame(AVFilterLink *outlink) {
 static av_cold void uninit(AVFilterContext *ctx) {
     TVAICPEContext *tvai = ctx->priv;
     av_log(ctx, AV_LOG_DEBUG, "Uninit called for %s\n", tvai->model);
-    if(tvai->pParamEstimator)
-        tvai_destroy(tvai->pParamEstimator);
+    // if(tvai->pFrameProcessor)
+    //     tvai_destroy(tvai->pFrameProcessor);
 }
 
 static const AVFilterPad tvai_cpe_inputs[] = {

@@ -92,62 +92,6 @@ AVFrame* ff_tvai_prepareBufferOutput(AVFilterLink *outlink, TVAIBuffer* oBuffer)
   return out;
 }
 
-int ff_tvai_handlePostFlight(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
-    tvai_end_stream(pProcessor);
-    int i, n = 0;//tvai_queued_frames(pProcessor);
-    for(i=0;i<n;i++) {
-        TVAIBuffer oBuffer;
-        AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
-        if(pProcessor == NULL || out == NULL ||tvai_process(pProcessor, &oBuffer, 0)) {
-            av_log(ctx, AV_LOG_ERROR, "The processing has failed");
-            av_frame_free(&in);
-            return AVERROR(ENOSYS);
-        }
-        av_frame_copy_props(out, in);
-        out->pts = oBuffer.pts;
-        if(oBuffer.pts < 0) {
-          av_frame_free(&out);
-          av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(oBuffer.pts, outlink->time_base));
-          //return AVERROR(ENOSYS);
-          continue;
-        }
-        av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %lf\n", TS2T(oBuffer.pts, outlink->time_base));
-        int code = ff_filter_frame(outlink, out);
-        if(code) {
-          return code;
-        }
-    }
-    return 0;
-}
-
-int ff_tvai_handleQueue(void* pProcessor, AVFilterLink *outlink, AVFrame *in, AVFilterContext* ctx) {
-    tvai_end_stream(pProcessor);
-    int i, n = 0;//tvai_queued_frames(pProcessor);
-    for(i=0;i<n;i++) {
-        TVAIBuffer oBuffer;
-        AVFrame *out = ff_tvai_prepareBufferOutput(outlink, &oBuffer);
-        if(pProcessor == NULL || out == NULL ||tvai_process(pProcessor, &oBuffer, 0)) {
-            av_log(ctx, AV_LOG_ERROR, "The processing has failed");
-            av_frame_free(&in);
-            return AVERROR(ENOSYS);
-        }
-        av_frame_copy_props(out, in);
-        out->pts = oBuffer.pts;
-        if(oBuffer.pts < 0) {
-          av_frame_free(&out);
-          av_log(ctx, AV_LOG_DEBUG, "Ignoring frame %lf\n", TS2T(oBuffer.pts, outlink->time_base));
-          //return AVERROR(ENOSYS);
-          continue;
-        }
-        av_log(ctx, AV_LOG_DEBUG, "Finished processing frame %lf\n", TS2T(oBuffer.pts, outlink->time_base));
-        int code = ff_filter_frame(outlink, out);
-        if(code) {
-          return code;
-        }
-    }
-    return 0;
-}
-
 int ff_tvai_process(void *pFrameProcessor, AVFrame* frame, int copy) {
     TVAIBuffer iBuffer;
     ff_tvai_prepareBufferInput(&iBuffer, frame);
@@ -180,4 +124,14 @@ int ff_tvai_add_output(void *pProcessor, AVFilterLink *outlink, AVFrame* frame, 
     }
     return 0;
 }
+
+void ff_tvai_ignore_output(void *pProcessor) {
+    int n = tvai_output_count(pProcessor), i;
+    for(i=0;i<n;i++) {
+        TVAIBuffer oBuffer;
+        tvai_output_frame(pProcessor, &oBuffer, 1);
+        av_log(NULL, AV_LOG_DEBUG, "Ignoring output frame %d %d\n", i, n);
+    }
+}
+
 
