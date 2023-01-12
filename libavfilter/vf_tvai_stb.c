@@ -53,7 +53,7 @@ typedef struct TVAIStbContext {
 #define OFFSET(x) offsetof(TVAIStbContext, x)
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 static const AVOption tvai_stb_options[] = {
-    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="ref-1"}, .flags = FLAGS },
+    { "model", "Model short name", OFFSET(model), AV_OPT_TYPE_STRING, {.str="ref-2"}, .flags = FLAGS },
     { "device",  "Device index (Auto: -2, CPU: -1, GPU0: 0, ...)",  OFFSET(device),  AV_OPT_TYPE_INT, {.i64=-2}, -2, 8, FLAGS, "device" },
     { "instances",  "Number of extra model instances to use on device",  OFFSET(extraThreads),  AV_OPT_TYPE_INT, {.i64=0}, 0, 3, FLAGS, "instances" },
     { "download",  "Enable model downloading",  OFFSET(canDownloadModels),  AV_OPT_TYPE_INT, {.i64=1}, 0, 1, FLAGS, "canDownloadModels" },
