@@ -37,7 +37,7 @@ int ff_tvai_checkModel(char* modelName, ModelType modelType, AVFilterContext* ct
 }
 
 int ff_tvai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
-                            int deviceIndex, int extraThreads, int vram, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
+                            int deviceIndex, int extraThreads, float vram, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
   ff_tvai_handleLogging();
   if(ff_tvai_checkModel(modelName, modelType, ctx) || ff_tvai_checkDevice(deviceIndex, ctx) || ff_tvai_checkScale(scale, ctx)) {
     return 1;
@@ -68,7 +68,7 @@ int ff_tvai_verifyAndSetInfo(VideoProcessorInfo* info, AVFilterLink *inlink, AVF
 }
 
 void* ff_tvai_verifyAndCreate(AVFilterLink *inlink, AVFilterLink *outlink, char *processorName, char* modelName, ModelType modelType,
-                            int deviceIndex, int extraThreads, int vram, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
+                            int deviceIndex, int extraThreads, float vram, int scale, int canDownloadModels, float *pParameters, int parameterCount, AVFilterContext* ctx) {
   VideoProcessorInfo info;
   if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, processorName, modelName, modelType, deviceIndex, extraThreads, vram, scale, canDownloadModels, pParameters, parameterCount, ctx))
     return NULL;

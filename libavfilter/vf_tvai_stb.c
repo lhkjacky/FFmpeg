@@ -90,7 +90,6 @@ static int config_props(AVFilterLink *outlink) {
   VideoProcessorInfo info;
   info.options[0] = tvai->filename;
   info.options[1] = tvai->filler;
-  float smoothness = tvai->smoothness;
   float params[11] = {tvai->smoothness, tvai->windowSize, tvai->postFlight, tvai->canvasScaleX, tvai->canvasScaleY, tvai->cacheSize, tvai->stabDOF, tvai->enableRSC, tvai->readStartTime, tvai->writeStartTime, tvai->reduceMotion};
   if(ff_tvai_verifyAndSetInfo(&info, inlink, outlink, (tvai->enableFullFrame > 0) ? (char*)"ffs" : (char*)"acs", tvai->model, ModelTypeStabilization, tvai->device, tvai->extraThreads, tvai->vram, 1, tvai->canDownloadModels, params, 11, ctx)) {
     return AVERROR(EINVAL);
