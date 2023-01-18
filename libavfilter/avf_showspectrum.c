@@ -454,10 +454,10 @@ static int run_channel_fft(AVFilterContext *ctx, void *arg, int jobnr, int nb_jo
         }
 
         memcpy(f, h, s->buf_size * sizeof(*f));
-        s->tx_fn(s->fft[ch], h, f, sizeof(float));
+        s->tx_fn(s->fft[ch], h, f, sizeof(AVComplexFloat));
 
         memcpy(f, g, s->buf_size * sizeof(*f));
-        s->tx_fn(s->fft[ch], g, f, sizeof(float));
+        s->tx_fn(s->fft[ch], g, f, sizeof(AVComplexFloat));
 
         for (int n = 0; n < L; n++) {
             c = g[n].re;
@@ -488,7 +488,7 @@ static int run_channel_fft(AVFilterContext *ctx, void *arg, int jobnr, int nb_jo
         }
 
         /* run FFT on each samples set */
-        s->tx_fn(s->fft[ch], s->fft_data[ch], s->fft_in[ch], sizeof(float));
+        s->tx_fn(s->fft[ch], s->fft_data[ch], s->fft_in[ch], sizeof(AVComplexFloat));
     }
 
     return 0;
@@ -1770,6 +1770,7 @@ static int showspectrumpic_request_frame(AVFilterLink *outlink)
 
         spf = s->win_size * (s->samples / ((s->win_size * sz) * ceil(s->samples / (float)(s->win_size * sz))));
         spf = FFMAX(1, spf);
+        s->hop_size = spf;
 
         spb = (s->samples / (spf * sz)) * spf;
 
